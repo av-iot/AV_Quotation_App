@@ -10,6 +10,11 @@ const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 export const metadata: Metadata = {
   title: "Alta Vision Solar — Proposal System",
   description: "Professional solar PV proposal and quotation management",
+  icons: {
+    icon: "/icon.png",
+    shortcut: "/icon.png",
+    apple: "/icon.png",
+  },
 };
 
 export const viewport: import("next").Viewport = {

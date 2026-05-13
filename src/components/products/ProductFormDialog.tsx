@@ -56,8 +56,10 @@ function numericFields(type: ProductType, data: any, invType: InverterType) {
       max_output_current: Number(data.max_output_current),
       pv_string_count: Number(data.pv_string_count),
       mppt_count: Number(data.mppt_count),
+      warranty: Number(data.warranty),
+      qty: Number(data.qty),
       buy_price: Number(data.buy_price),
-sell_price: Number(data.sell_price),
+      sell_price: Number(data.sell_price),
     };
     if (invType === "hybrid" || invType === "offgrid") {
       return {
@@ -77,8 +79,10 @@ sell_price: Number(data.sell_price),
       max_energy: Number(data.max_energy),
       nominal_voltage: Number(data.nominal_voltage),
       cycle_count: Number(data.cycle_count),
+      warranty: Number(data.warranty),
+      qty: Number(data.qty),
       buy_price: Number(data.buy_price),
-sell_price: Number(data.sell_price),
+      sell_price: Number(data.sell_price),
     };
   }
   if (type === "panel") {
@@ -89,8 +93,10 @@ sell_price: Number(data.sell_price),
       width: Number(data.width),
       height: Number(data.height),
       length: Number(data.length),
+      warranty: Number(data.warranty),
+      qty: Number(data.qty),
       buy_price: Number(data.buy_price),
-sell_price: Number(data.sell_price),
+      sell_price: Number(data.sell_price),
     };
   }
   return {};
@@ -221,15 +227,31 @@ useEffect(() => {
             <Field label="Country of manufacture" required>
               <Input {...register("manufacture", { required: true })} placeholder="China" className="h-9 text-sm" />
             </Field>
-            <Field label="Warranty" required col2>
-              <Input {...register("warranty", { required: true })} placeholder="Five (5) Years Product Warranty" className="h-9 text-sm" />
+            <Field label="Warranty (Years)" required>
+              <Input {...register("warranty", { required: true })} type="number" placeholder="5" className="h-9 text-sm" />
+            </Field>
+            <Field label="Inventory / Batch Qty" required>
+              <Input {...register("qty", { required: true })} type="number" placeholder="10" className="h-9 text-sm" />
             </Field>
             <Field label="Buy price (LKR)" required>
-  <Input {...register("buy_price", { required: true })} type="number" step="any" placeholder="0" className="h-9 text-sm" />
-</Field>
-<Field label="Sell price (LKR)" required>
-  <Input {...register("sell_price", { required: true })} type="number" step="any" placeholder="0" className="h-9 text-sm" />
-</Field>
+              <Input 
+                {...register("buy_price", { required: true })} 
+                type="number" 
+                step="any" 
+                placeholder="0" 
+                className="h-9 text-sm" 
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setValue("buy_price", val);
+                  const num = Number(val) || 0;
+                  const sell = num * 1.205 * 1.10;
+                  setValue("sell_price", sell.toFixed(2), { shouldDirty: true });
+                }}
+              />
+            </Field>
+            <Field label="Sell price (LKR)" required>
+              <Input {...register("sell_price", { required: true })} type="number" step="any" placeholder="0" className="h-9 text-sm" />
+            </Field>
 
             {/* ── INVERTER FIELDS ── */}
             {productType === "inverter" && (

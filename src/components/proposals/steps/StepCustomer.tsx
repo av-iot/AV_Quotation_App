@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { FormItem, FormLabel, FormControl, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
 import { User } from "lucide-react";
 import { motion } from "framer-motion";
 
@@ -18,7 +19,7 @@ const fadeUp = {
 };
 
 export default function StepCustomer({ onNext }: { onNext: () => void }) {
-  const { register, formState: { errors } } = useFormContext<ProposalFormData>();
+  const { register, watch, setValue, formState: { errors } } = useFormContext<ProposalFormData>();
 
   return (
     <motion.div variants={stagger} initial="initial" animate="animate">
@@ -69,7 +70,7 @@ export default function StepCustomer({ onNext }: { onNext: () => void }) {
             {/* Phone 1 — required */}
             <motion.div variants={fadeUp}>
               <FormItem>
-                <FormLabel>Phone number *</FormLabel>
+                <FormLabel>Phone number (whatsapp if available) *</FormLabel>
                 <FormControl>
                   <Input
                     {...register("phone", { required: "Phone number is required" })}
@@ -122,6 +123,39 @@ export default function StepCustomer({ onNext }: { onNext: () => void }) {
                   <FormMessage>{errors.email.message}</FormMessage>
                 )}
               </FormItem>
+            </motion.div>
+
+            {/* Quotation sending format */}
+            <motion.div variants={fadeUp} className="sm:col-span-2 pt-2">
+              <FormLabel className="text-sm font-semibold mb-3 block">Quotation sending format</FormLabel>
+              <div className="flex flex-wrap gap-4">
+                {[
+                  { id: "email", label: "Email" },
+                  { id: "whatsapp", label: "WhatsApp" },
+                  { id: "print", label: "Print (Mail)" },
+                ].map((format) => (
+                  <div key={format.id} className="flex items-center gap-2">
+                    <Checkbox
+                      id={`format-${format.id}`}
+                      checked={(watch("sendFormat") || []).includes(format.id)}
+                      onCheckedChange={(checked) => {
+                        const current = watch("sendFormat") || [];
+                        if (checked) {
+                          setValue("sendFormat", [...current, format.id]);
+                        } else {
+                          setValue("sendFormat", current.filter((f) => f !== format.id));
+                        }
+                      }}
+                    />
+                    <label
+                      htmlFor={`format-${format.id}`}
+                      className="text-sm cursor-pointer"
+                    >
+                      {format.label}
+                    </label>
+                  </div>
+                ))}
+              </div>
             </motion.div>
 
           </div>

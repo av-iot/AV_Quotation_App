@@ -10,7 +10,7 @@ export interface AppUser {
 
 // ─── Products / catalog ──────────────────────────────────────────────────────
 export type ProductType = "panel" | "inverter" | "battery";
-export type SystemType = "ongrid" | "hybrid" | "offgrid";
+export type SystemType = "ongrid" | "hybrid" | "hybrid-offgrid" | "offgrid";
 export type Phase = "1" | "3";
 export type InverterType = "ongrid" | "hybrid" | "offgrid";
 
@@ -36,7 +36,8 @@ export interface InverterProduct {
   pv_string_count: number;
   mppt_count: number;
   max_output_current: number;
-  warranty: string;
+  warranty: number;
+  qty: number;
   buy_price: number;
   sell_price: number;
   // Hybrid / offgrid only
@@ -67,7 +68,8 @@ export interface BatteryProduct {
   battery_operating_voltage: string;
   cycle_count: number;
   battery_model_type: string;
-  warranty: string;
+  warranty: number;
+  qty: number;
  buy_price: number;
   sell_price: number;
 }
@@ -89,7 +91,8 @@ export interface PanelProduct {
   width: number;
   height: number;
   length: number;
-  warranty: string;
+  warranty: number;
+  qty: number;
   buy_price: number;
   sell_price: number;
 }
@@ -154,7 +157,7 @@ export interface CustomerInfo {
     cutoutCurrent: string;
     mountType?: string;
     powerScheme: string;
-  numOptions: 1 | 2;
+  numOptions: number;
   options: ProposalOption[];
   pay1: string;
   pay2: string;
@@ -230,6 +233,7 @@ export interface ProposalFormData {
   powerScheme: string;
   mountType: "roof" | "ground";
   monthlyUsage: string;
+  batteryDays: number;
   numOptions: 1 | 2;
   // Step 3 – options (components)
   options: OptionFormData[];
@@ -241,12 +245,14 @@ export interface ProposalFormData {
 }
 
 export interface OptionFormData {
+  sysType: SystemType;
   panelProductId: string;
   panelQty: string;
   inverterProductId: string;
   inverterQty: string;
   batteryProductId?: string;
   batteryQty?: string;
+  batteryDays?: number;
   coo: string;
   oversize: boolean;
   estOutput: string;

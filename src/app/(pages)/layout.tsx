@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -32,6 +33,17 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [collapsed, setCollapsed] = useState(false);
   const [showToggle, setShowToggle] = useState(false);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const autoCollapseRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Auto-collapse after 5 seconds on first load
+  useEffect(() => {
+    autoCollapseRef.current = setTimeout(() => {
+      setCollapsed(true);
+    }, 5000);
+    return () => {
+      if (autoCollapseRef.current) clearTimeout(autoCollapseRef.current);
+    };
+  }, []);
   
   const pathname = usePathname();
   const { theme, setTheme } = useTheme();
@@ -86,7 +98,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </AnimatePresence>
 
         {/* Logo area */}
-        <div className={cn("flex h-16 items-center border-b", collapsed ? "justify-center" : "px-4")}>
+        <div className={cn("flex h-16 items-center border-b", collapsed ? "justify-center px-2" : "px-4")}>
           <AnimatePresence initial={false}>
             {!collapsed && (
               <motion.div
@@ -94,21 +106,29 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -8 }}
                 transition={{ duration: 0.18 }}
-                className="flex items-center gap-2.5 overflow-hidden"
+                className="flex items-center overflow-hidden"
               >
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary">
-                  <Sun className="h-4 w-4 text-primary-foreground" strokeWidth={2} />
-                </div>
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-bold leading-tight text-foreground">Alta Vision</p>
-                  <p className="truncate text-[10px] text-muted-foreground">Solar PV System</p>
-                </div>
+                <Image
+                  src="/logo.png"
+                  alt="Alta Vision"
+                  width={170}
+                  height={27}
+                  className="object-contain"
+                  priority
+                />
               </motion.div>
             )}
           </AnimatePresence>
           {collapsed && (
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary shrink-0">
-              <Sun className="h-4 w-4 text-primary-foreground" strokeWidth={2} />
+            <div className="flex w-full items-center justify-center">
+              <Image
+                src="/icon.png"
+                alt="Alta Vision"
+                width={36}
+                height={36}
+                className="object-contain"
+                priority
+              />
             </div>
           )}
         </div>

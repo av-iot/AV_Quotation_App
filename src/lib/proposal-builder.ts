@@ -2,31 +2,52 @@ import type { Proposal, ProposalFormData, ProposalOption, ComponentSpec } from "
 
 export function buildProposalFromForm(
   form: ProposalFormData,
-  userId: string
+  userId: string,
+  productsMap: Map<string, any>
 ): Omit<Proposal, "id" | "createdAt" | "updatedAt"> {
   const qtnNo = form.qtnNo || `QTN_${Date.now().toString().slice(-5)}`;
 
   const options: ProposalOption[] = form.options
     .slice(0, form.numOptions)
     .map((opt, i) => {
+      const panelData = productsMap.get(opt.panelProductId);
       const panel: ComponentSpec = {
-        brand: "", model: opt.panelProductId, ratingLabel: "",
-        qty: Number(opt.panelQty) || 0, totalCapacity: "",
-        warranty: "", origin: opt.coo || "China", manufacture: opt.coo || "China",
+        brand: panelData?.brand || "",
+        model: panelData?.model || opt.panelProductId,
+        ratingLabel: panelData ? `${panelData.max_panel_output_power || panelData.max_panel_output}W` : "",
+        qty: Number(opt.panelQty) || 0,
+        totalCapacity: "",
+        warranty: panelData ? `${panelData.warranty} years` : "",
+        origin: panelData?.origin || "China",
+        manufacture: panelData?.manufacture || "China",
         productId: opt.panelProductId,
       };
+
+      const invData = productsMap.get(opt.inverterProductId);
       const inverter: ComponentSpec = {
-        brand: "", model: opt.inverterProductId, ratingLabel: "",
-        qty: Number(opt.inverterQty) || 1, totalCapacity: "",
-        warranty: "", origin: opt.coo || "China", manufacture: opt.coo || "China",
+        brand: invData?.brand || "",
+        model: invData?.model || opt.inverterProductId,
+        ratingLabel: invData ? `${invData.input_rated_power / 1000}kW` : "",
+        qty: Number(opt.inverterQty) || 1,
+        totalCapacity: "",
+        warranty: invData ? `${invData.warranty} years` : "",
+        origin: invData?.origin || "China",
+        manufacture: invData?.manufacture || "China",
         productId: opt.inverterProductId,
       };
+
+      const batData = opt.batteryProductId ? productsMap.get(opt.batteryProductId) : null;
       const battery: ComponentSpec | undefined =
-        form.sysType !== "ongrid" && opt.batteryProductId
+        opt.sysType !== "ongrid" && opt.batteryProductId
           ? {
-              brand: "", model: opt.batteryProductId, ratingLabel: "",
-              qty: Number(opt.batteryQty) || 1, totalCapacity: "",
-              warranty: "", origin: opt.coo || "China", manufacture: opt.coo || "China",
+              brand: batData?.brand || "",
+              model: batData?.model || opt.batteryProductId,
+              ratingLabel: batData ? `${batData.usable_energy}kWh` : "",
+              qty: Number(opt.batteryQty) || 1,
+              totalCapacity: "",
+              warranty: batData ? `${batData.warranty} years` : "",
+              origin: batData?.origin || "China",
+              manufacture: batData?.manufacture || "China",
               productId: opt.batteryProductId,
             }
           : undefined;

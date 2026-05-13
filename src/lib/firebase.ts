@@ -25,7 +25,7 @@ export const db = getFirestore(app);
 export const storage = getStorage(app);
 
 export const googleProvider = new GoogleAuthProvider();
-googleProvider.setCustomParameters({ hd: undefined }); // domain hint handled server-side
+// googleProvider.setCustomParameters({ hd: undefined }); // domain hint handled server-side
 
 export async function signInWithGoogle() {
   const result = await signInWithPopup(auth, googleProvider);

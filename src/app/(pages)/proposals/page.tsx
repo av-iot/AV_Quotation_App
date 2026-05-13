@@ -114,7 +114,11 @@ export default function ProposalsPage() {
                       </TableCell>
                       <TableCell className="py-3 text-sm">{p.customer?.name}</TableCell>
                       <TableCell className="py-3 text-sm text-muted-foreground">{p.date}</TableCell>
-                      <TableCell className="py-3 text-xs uppercase text-muted-foreground">{p.sysType}</TableCell>
+                      <TableCell className="py-3 text-xs uppercase text-muted-foreground">
+                        {p.options && p.options.length > 0
+                          ? Array.from(new Set(p.options.map((o: any) => o.sysType).filter(Boolean))).join(", ")
+                          : p.sysType}
+                      </TableCell>
                       <TableCell className="py-3 text-sm text-center">{p.numOptions}</TableCell>
                       <TableCell className="py-3">
                         <Badge variant={STATUS[p.status]?.variant || "outline"} className="text-xs">

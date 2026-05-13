@@ -130,6 +130,7 @@ export default function ProductsPage() {
                         {tabVal === "inverter" && (<><TableHead className="text-xs">Type</TableHead><TableHead className="text-xs">Phase</TableHead><TableHead className="text-xs">Rated power</TableHead><TableHead className="text-xs">MPPT</TableHead></>)}
                         {tabVal === "battery" && (<><TableHead className="text-xs">Usable energy</TableHead><TableHead className="text-xs">Cell type</TableHead><TableHead className="text-xs">Voltage</TableHead><TableHead className="text-xs">Cycles</TableHead></>)}
                         {tabVal === "panel" && (<><TableHead className="text-xs">Output</TableHead><TableHead className="text-xs">Type</TableHead><TableHead className="text-xs">Efficiency</TableHead><TableHead className="text-xs">Size (mm)</TableHead></>)}
+                        <TableHead className="text-xs text-center">Inventory</TableHead>
                         <TableHead className="text-xs text-right">Buy / Sell</TableHead>
                         <TableHead className="text-xs">Status</TableHead>
                         <TableHead className="text-xs" />
@@ -163,12 +164,18 @@ export default function ProductsPage() {
                               <TableCell className="py-3 text-xs text-muted-foreground">{(p as PanelProduct).width} × {(p as PanelProduct).height}</TableCell>
                             </>)}
 
-<TableCell className="py-3 text-right text-sm tabular-nums">
-  <div className="flex flex-col items-end gap-0.5">
-    <span className="text-xs text-muted-foreground">B: {fmtRs((p as any).buy_price)}</span>
-    <span className="font-medium">S: {fmtRs((p as any).sell_price)}</span>
-  </div>
-</TableCell>                     <TableCell className="py-3">
+                            <TableCell className="py-3 text-center text-sm tabular-nums">
+                              <Badge variant={(p.qty || 0) > 0 ? "secondary" : "destructive"} className="font-mono">
+                                {p.qty || 0}
+                              </Badge>
+                            </TableCell>
+
+                            <TableCell className="py-3 text-right text-sm tabular-nums">
+                              <div className="flex flex-col items-end gap-0.5">
+                                <span className="text-xs text-muted-foreground">B: {fmtRs((p as any).buy_price)}</span>
+                                <span className="font-medium">S: {fmtRs((p as any).sell_price)}</span>
+                              </div>
+                            </TableCell>                     <TableCell className="py-3">
                               <button onClick={() => handleToggleActive(p)}>
                                 <Badge variant={p.active ? "default" : "secondary"} className="cursor-pointer text-xs">
                                   {p.active ? "Active" : "Inactive"}

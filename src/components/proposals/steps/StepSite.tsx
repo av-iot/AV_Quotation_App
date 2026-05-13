@@ -14,7 +14,6 @@ const fadeUp = { initial: { opacity: 0, y: 8 }, animate: { opacity: 1, y: 0, tra
 
 export default function StepSite({ onNext }: { onNext: () => void }) {
   const { register, watch, setValue } = useFormContext<ProposalFormData>();
-  const sysType = watch("sysType");
   const phase = watch("phase") || "1";
   const cutoutCurrent = watch("cutoutCurrent") || "63";
 
@@ -30,29 +29,17 @@ export default function StepSite({ onNext }: { onNext: () => void }) {
         <CardHeader className="pb-4">
           <CardTitle className="flex items-center gap-2 text-base">
             <Home className="h-4 w-4 text-primary" />
-            Site & system type
+            Site details
           </CardTitle>
         </CardHeader>
         <CardContent>
           <div className="grid gap-4 sm:grid-cols-2">
-            <motion.div variants={fadeUp} className="space-y-1.5">
-              <Label>System type *</Label>
-              <Select value={sysType} onValueChange={(v) => setValue("sysType", v as any)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="ongrid">On-Grid (Grid Tied)</SelectItem>
-                  <SelectItem value="hybrid">Hybrid (Grid Tied + Battery)</SelectItem>
-                  <SelectItem value="offgrid">Off-Grid (Battery)</SelectItem>
-                </SelectContent>
-              </Select>
-            </motion.div>
 
             <motion.div variants={fadeUp} className="space-y-1.5">
   <Label>Utility provider</Label>
   <Select
-    value={sysType === "offgrid" ? "NONE" : (watch("utility") || "CEB")}
+    value={watch("utility") || "CEB"}
     onValueChange={(v) => setValue("utility", v as any)}
-    disabled={sysType === "offgrid"}
   >
     <SelectTrigger>
       <SelectValue />
@@ -63,11 +50,6 @@ export default function StepSite({ onNext }: { onNext: () => void }) {
       <SelectItem value="NONE">None</SelectItem>
     </SelectContent>
   </Select>
-  {sysType === "offgrid" && (
-    <p className="text-xs text-muted-foreground">
-      Off-grid systems have no utility connection.
-    </p>
-  )}
 </motion.div>
 
             <motion.div variants={fadeUp} className="space-y-1.5">

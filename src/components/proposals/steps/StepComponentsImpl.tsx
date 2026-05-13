@@ -2,7 +2,7 @@
 
 import { useFormContext } from "react-hook-form";
 import { useEffect, useState } from "react";
-import { collection, query, where, getDocs } from "firebase/firestore";
+import { collection, query, where, getDocs, orderBy, limit } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import sizingConfig from "@/lib/data.json";
 import type { ProposalFormData, PanelProduct, InverterProduct, BatteryProduct } from "@/types";
@@ -13,7 +13,8 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Cpu, Zap, Battery as BatteryIcon, Loader2, Info, Lightbulb, Pencil, Check, X } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Cpu, Zap, Battery as BatteryIcon, Loader2, Info, Lightbulb, Pencil, Check, X, Plus, Trash2, History } from "lucide-react";
 import { motion } from "framer-motion";
 
 const stagger = { animate: { transition: { staggerChildren: 0.07 } } };
@@ -35,6 +36,7 @@ function filterInverters(inverters: InverterProduct[], sysType: string): Inverte
     if (sysType === "ongrid")  return t === "ongrid"  || t === "hybrid";
     if (sysType === "offgrid") return t === "offgrid" || t === "hybrid";
     if (sysType === "hybrid")  return t === "hybrid";
+    if (sysType === "hybrid-offgrid") return t === "offgrid" || t === "hybrid";
     return true;
   });
 }
@@ -53,33 +55,56 @@ interface InverterSuggestion {
   inverter: InverterProduct;
   qty: number;
   totalKw: number;
-  reason: "exact" | "above" | "multiple_smaller";
+  reason: "exact" | "above" | "multiple_smaller" | "historical";
+  historicalPanelId?: string;
 }
 
 // Core suggestion logic:
-// 1. Find inverter(s) within range           → qty 1
-// 2. Next inverter above range               → qty 1
-// 3. Only smaller inverters available        → qty = ceil(recHighKw / invKw)
 function suggestInverter(
   inverters: InverterProduct[],
   recLowKw: number,
-  recHighKw: number
+  recHighKw: number,
+  pastProposals: any[],
+  sysType: string
 ): InverterSuggestion | null {
   if (!inverters.length) return null;
+
+  // 1. Try Historical Match First
+  if (pastProposals && pastProposals.length > 0) {
+    for (const prop of pastProposals) {
+      if (prop.sysType === sysType && prop.options && prop.options.length > 0) {
+        const opt = prop.options[0]; // analyze the primary option
+        const histInvId = opt.inverter?.productId;
+        const histPanelId = opt.panel?.productId;
+        if (histInvId) {
+          const matchedInv = inverters.find(i => i.id === histInvId);
+          if (matchedInv) {
+            const histTotalKw = (matchedInv.input_rated_power * (opt.inverter?.qty || 1)) / 1000;
+            if (histTotalKw >= recLowKw * 0.8 && histTotalKw <= recHighKw * 1.2) {
+              return {
+                inverter: matchedInv,
+                qty: opt.inverter?.qty || 1,
+                totalKw: histTotalKw,
+                reason: "historical",
+                historicalPanelId: histPanelId
+              };
+            }
+          }
+        }
+      }
+    }
+  }
 
   const sorted = [...inverters].sort(
     (a, b) => a.input_rated_power - b.input_rated_power
   );
 
-  // 1. Exact range match (prefer largest in range)
-  // 1. Find inverters within range, pick the one closest to recLowKw
- // 1. Find inverters within range, pick closest to recLowKw (lowest recommended)
+  // 2. Exact range match
   const inRange = sorted.filter((inv) => {
     const kw = inv.input_rated_power / 1000;
     return kw >= recLowKw && kw <= recHighKw;
   });
   if (inRange.length > 0) {
-    // Pick the one closest to recLowKw — lowest sufficient capacity
     const inv = inRange.reduce((prev, curr) => {
       const prevDiff = Math.abs(prev.input_rated_power / 1000 - recLowKw);
       const currDiff = Math.abs(curr.input_rated_power / 1000 - recLowKw);
@@ -88,23 +113,21 @@ function suggestInverter(
     return { inverter: inv, qty: 1, totalKw: inv.input_rated_power / 1000, reason: "exact" };
   }
 
-  // 2. No inverter in range — find next above recLowKw (not recHighKw)
+  // 3. No inverter in range — find next above recLowKw
   const above = sorted.filter(
     (inv) => inv.input_rated_power / 1000 > recLowKw
   );
   if (above.length > 0) {
-    const inv = above[0]; // smallest above recLowKw
+    const inv = above[0];
     return { inverter: inv, qty: 1, totalKw: inv.input_rated_power / 1000, reason: "above" };
   }
 
-  // 3. All inverters are smaller — find the best inverter × qty combination
-  // that gives a total closest to recLowKw (minimum required), not recHighKw
+  // 4. All inverters are smaller — find the best inverter × qty combination
   let bestInv = sorted[sorted.length - 1];
   let bestQty = Math.ceil((recLowKw * 1000) / bestInv.input_rated_power);
   let bestTotal = (bestInv.input_rated_power / 1000) * bestQty;
   let bestDiff = Math.abs(bestTotal - recLowKw);
 
-  // Check all available inverters — pick combo whose total is nearest to recLowKw
   for (const inv of sorted) {
     const invKw = inv.input_rated_power / 1000;
     const qty = Math.ceil(recLowKw / invKw);
@@ -128,32 +151,36 @@ function suggestInverter(
 
 export default function StepComponents({ onNext }: { onNext: () => void }) {
   const { watch, setValue, register } = useFormContext<ProposalFormData>();
-  const sysType    = watch("sysType");
   const numOptions = watch("numOptions");
   const [products, setProducts] = useState<Products>({
     panels: [], inverters: [], batteries: [],
   });
+  const [pastProposals, setPastProposals] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function load() {
       setLoading(true);
       try {
-        const snap = await getDocs(
-          query(collection(db, "products"), where("active", "==", true))
-        );
-        const all = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as any[];
+        const [prodSnap, propSnap] = await Promise.all([
+          getDocs(query(collection(db, "products"), where("active", "==", true))),
+          getDocs(query(collection(db, "proposals"), orderBy("date", "desc"), limit(25)))
+        ]);
+
+        const all = prodSnap.docs.map((d) => ({ id: d.id, ...d.data() })) as any[];
         setProducts({
-  panels:    all.filter((p) => p.type === "panel"),
-  inverters: all.filter((p) => p.type === "inverter"),
-  batteries: all.filter((p) => p.type === "battery"),
-});
-// Cache products by ID so StepPricing can look up sell prices
-const cache: Record<string, any> = {};
-all.forEach((p) => { cache[p.id] = p; });
-(window as any).__productCache = cache;
+          panels:    all.filter((p) => p.type === "panel"),
+          inverters: all.filter((p) => p.type === "inverter"),
+          batteries: all.filter((p) => p.type === "battery"),
+        });
+
+        setPastProposals(propSnap.docs.map(d => d.data()));
+
+        const cache: Record<string, any> = {};
+        all.forEach((p) => { cache[p.id] = p; });
+        (window as any).__productCache = cache;
       } catch (err) {
-        console.error("Failed to load products:", err);
+        console.error("Failed to load products/proposals:", err);
         setProducts({ panels: [], inverters: [], batteries: [] });
       } finally {
         setLoading(false);
@@ -188,12 +215,8 @@ all.forEach((p) => { cache[p.id] = p; });
   const recLowKw  = rawLow  != null ? Math.ceil(rawLow)  : null;
   const recHighKw = rawHigh != null ? Math.ceil(rawHigh) : null;
 
-  const filteredInverters = filterInverters(products.inverters, sysType);
-  const suggestion = recLowKw && recHighKw ? suggestInverter(filteredInverters, recLowKw, recHighKw) : null;
-
   return (
     <motion.div variants={stagger} initial="initial" animate="animate" className="space-y-4">
-      {/* ── Global Customer Usage ── */}
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2 text-sm">
@@ -202,7 +225,7 @@ all.forEach((p) => { cache[p.id] = p; });
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid gap-4 sm:grid-cols-3">
+          <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">
               <Label className="text-xs">Monthly usage (kWh)</Label>
               <Input
@@ -213,56 +236,53 @@ all.forEach((p) => { cache[p.id] = p; });
                 placeholder="e.g. 600"
               />
             </div>
-
-            {/* Recommendation banner */}
             {recLowKw != null && recHighKw != null && (
-              <div className="sm:col-span-2 flex items-start gap-2 rounded-lg border border-primary/20 bg-primary/5 px-4 py-2.5">
-                <Lightbulb className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-                <div className="space-y-1">
-                  <p className="text-xs text-primary">
-                    Based on <span className="font-bold">{monthlyUsage} kWh/month</span> — recommended inverter: <span className="font-bold">{recLowKw} kW – {recHighKw} kW</span>
-                  </p>
-
-                  {/* Show suggestion detail */}
-                  {suggestion && (
-                    <p className="text-xs text-muted-foreground">
-                      {suggestion.reason === "exact" && (
-                        <>✅ Matched: <span className="font-medium text-foreground">{suggestion.qty}× {kwLabel(suggestion.inverter.input_rated_power)} {suggestion.inverter.brand} ({suggestion.inverter.model})</span></>
-                      )}
-                      {suggestion.reason === "above" && (
-                        <>↑ Nearest above range: <span className="font-medium text-foreground">{suggestion.qty}× {kwLabel(suggestion.inverter.input_rated_power)} {suggestion.inverter.brand} ({suggestion.inverter.model})</span></>
-                      )}
-                      {suggestion.reason === "multiple_smaller" && (
-                        <>⚡ No single match — suggest <span className="font-medium text-foreground">{suggestion.qty}× {kwLabel(suggestion.inverter.input_rated_power)} {suggestion.inverter.brand} ({suggestion.inverter.model})</span> = <span className="font-medium text-foreground">{kwLabel(suggestion.totalKw * 1000)} total</span></>
-                      )}
-                    </p>
-                  )}
-                </div>
+              <div className="flex items-center gap-2 rounded-lg border border-primary/20 bg-primary/5 px-3 py-2">
+                <Lightbulb className="h-4 w-4 shrink-0 text-primary" />
+                <p className="text-xs text-primary">
+                  Recommended inverter:{" "}
+                  <span className="font-bold">{recLowKw} kW – {recHighKw} kW</span>
+                  <span className="text-muted-foreground"> based on {monthlyUsage} kWh/month</span>
+                </p>
               </div>
             )}
           </div>
         </CardContent>
       </Card>
 
-      {Array.from({ length: numOptions }, (_, idx) => (
+      {Array.from({ length: numOptions || 1 }, (_, idx) => (
         <OptionBlock
           key={idx}
           idx={idx}
-          sysType={sysType}
           products={products}
           register={register}
           watch={watch}
           setValue={setValue}
           globalRecLowKw={recLowKw}
           globalRecHighKw={recHighKw}
-          globalSuggestion={suggestion}
+          pastProposals={pastProposals}
+          usageNum={usageNum}
+          onRemove={idx > 0 ? () => setValue("numOptions", ((numOptions || 1) - 1) as any) : undefined}
         />
       ))}
+
+      {numOptions < 4 && (
+        <div className="flex justify-center pt-2 pb-6">
+          <Button 
+            type="button" 
+            variant="outline" 
+            onClick={() => setValue("numOptions", ((numOptions || 1) + 1) as any)}
+            className="gap-2 rounded-full border-primary/30 hover:bg-primary/5 hover:text-primary"
+          >
+            <Plus className="h-4 w-4" />
+            Add Another Option
+          </Button>
+        </div>
+      )}
     </motion.div>
   );
 }
 
-// ── Editable field — shows value with a pencil icon, click to edit inline ────
 function EditableValue({
   label,
   value,
@@ -322,12 +342,17 @@ function EditableValue({
   );
 }
 
-// ── Option block ─────────────────────────────────────────────────────────────
-function OptionBlock({  idx, sysType, products, register, watch, setValue, globalRecLowKw, globalRecHighKw, globalSuggestion }: any) {
+// Real OptionBlock with requested fixes
+function OptionBlock({ idx, products, register, watch, setValue, globalRecLowKw, globalRecHighKw, pastProposals, usageNum, onRemove }: any) {
   const prefix = `options.${idx}` as const;
 
-  // ── Inverter ──────────────────────────────────────────────────────────────
+  const sysType: string = watch(`${prefix}.sysType`) || "ongrid";
+  const hasBattery = sysType !== "ongrid";
+
   const filteredInverters = filterInverters(products.inverters, sysType);
+  const suggestion = globalRecLowKw && globalRecHighKw
+    ? suggestInverter(filteredInverters, globalRecLowKw, globalRecHighKw, pastProposals, sysType)
+    : null;
   const invId             = watch(`${prefix}.inverterProductId`) || "";
   const invQtyRaw         = watch(`${prefix}.inverterQty`) || "";
   const oversize          = watch(`${prefix}.oversize`) || false;
@@ -337,29 +362,26 @@ function OptionBlock({  idx, sysType, products, register, watch, setValue, globa
     (i: InverterProduct) => i.id === invId
   );
 
-  // Auto-apply suggestion only once when usage is first entered
   useEffect(() => {
-    if (!globalSuggestion) return;
+    if (!suggestion) return;
     if (!invId) {
-      setValue(`${prefix}.inverterProductId`, globalSuggestion.inverter.id);
+      setValue(`${prefix}.inverterProductId`, suggestion.inverter.id);
       setValue(`${prefix}.panelQty`, "");
+      if (suggestion.historicalPanelId) {
+        setValue(`${prefix}.panelProductId`, suggestion.historicalPanelId);
+      }
     }
-    // Only auto-fill qty if user has NOT manually edited it
     if (!userEditedQty) {
-      setValue(`${prefix}.inverterQty`, String(globalSuggestion.qty));
+      setValue(`${prefix}.inverterQty`, String(suggestion.qty));
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [globalRecLowKw, globalRecHighKw, globalSuggestion?.inverter.id]);
+  }, [globalRecLowKw, globalRecHighKw, suggestion?.inverter.id, sysType]);
 
-
-  // Total inverter capacity (single unit)
   const singleInvCapW = selectedInv
     ? oversize
       ? selectedInv.max_input_power
       : selectedInv.input_rated_power
     : 0;
 
-  // Total capacity across all units
   const invQtyNum     = parseInt(invQtyRaw) || 1;
   const totalInvCapW  = singleInvCapW * invQtyNum;
   const totalInvCapKw = totalInvCapW
@@ -367,12 +389,11 @@ function OptionBlock({  idx, sysType, products, register, watch, setValue, globa
         ? (totalInvCapW / 1000).toFixed(0)
         : (totalInvCapW / 1000).toFixed(1))
     : null;
-    // ── Permitted power check (ongrid only) ──────────────────────────────────
+
   const cutoutCurrent = parseFloat(watch("cutoutCurrent") || "0");
-  const phase         = watch("phase"); // "1" or "3"
+  const phase         = watch("phase"); 
   const phaseNum      = phase === "3" ? 3 : 1;
 
-  // permitted power in kW = cutout_current × phase × home_voltage / 1000
   const permittedPowerKw = cutoutCurrent > 0
     ? (cutoutCurrent * phaseNum * HOME_VOLTAGE) / 1000
     : null;
@@ -383,84 +404,96 @@ function OptionBlock({  idx, sysType, products, register, watch, setValue, globa
     totalInvCapW > 0 &&
     totalInvCapW / 1000 > permittedPowerKw;
 
-  // ── Panels ────────────────────────────────────────────────────────────────
   const panelId  = watch(`${prefix}.panelProductId`) || "";
   const panelQty = watch(`${prefix}.panelQty`)       || "";
   const panel    = products.panels.find((p: PanelProduct) => p.id === panelId);
 
   const suggestedPanelQty = panel && totalInvCapW
-    ? Math.ceil(totalInvCapW / panel.max_panel_output)
+    ? Math.ceil(totalInvCapW / (panel.max_panel_output_power || (panel as any).max_panel_output))
     : null;
 
-  const totalKw = panel && panelQty
-    ? ((Number(panelQty) * panel.max_panel_output) / 1000).toFixed(2) + " kW"
-    : "";
-
   useEffect(() => {
-    if (suggestedPanelQty && !panelQty) {
+    if (suggestedPanelQty) {
       setValue(`${prefix}.panelQty`, String(suggestedPanelQty));
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [invId, oversize, panelId, invQtyRaw]);
+  }, [suggestedPanelQty]);
 
-  // ── Battery ───────────────────────────────────────────────────────────────
   const batId    = watch(`${prefix}.batteryProductId`) || "";
   const batQty   = watch(`${prefix}.batteryQty`)       || "";
-// Filter batteries by inverter voltage compatibility
-const compatibleBatteries = products.batteries.filter((b: BatteryProduct) => {
-  if (!selectedInv) return true; // show all if no inverter selected yet
-  if (!selectedInv.min_battery_voltage || !selectedInv.max_battery_voltage) return true;
-  // Parse battery_operating_voltage — stored as e.g. "44.8 - 57.6V" or "48V"
-  const raw = b.battery_operating_voltage || "";
-  const nums = raw.replace(/V/gi, "").split("-").map((s: string) => parseFloat(s.trim())).filter((n: number) => !isNaN(n));
-  if (nums.length === 0) return true; // can't parse — show it
-  const batMin = nums[0];
-  const batMax = nums.length > 1 ? nums[1] : nums[0];
-  // Compatible if battery voltage range overlaps inverter battery voltage range
-  return batMax >= selectedInv.min_battery_voltage && batMin <= selectedInv.max_battery_voltage;
-});
 
-const bat = compatibleBatteries.find((b: BatteryProduct) => b.id === batId)
-         || products.batteries.find((b: BatteryProduct) => b.id === batId);
+  const compatibleBatteries = products.batteries.filter((b: BatteryProduct) => {
+    if (!selectedInv) return true;
+    if (!selectedInv.min_battery_voltage || !selectedInv.max_battery_voltage) return true;
+    const raw = b.battery_operating_voltage || "";
+    const nums = raw.replace(/V/gi, "").split("-").map((s: string) => parseFloat(s.trim())).filter((n: number) => !isNaN(n));
+    if (nums.length === 0) return true;
+    const batMin = nums[0];
+    const batMax = nums.length > 1 ? nums[1] : nums[0];
+    return batMax >= selectedInv.min_battery_voltage && batMin <= selectedInv.max_battery_voltage;
+  });
 
-  const totalKwh = bat && batQty
-    ? (Number(batQty) * bat.usable_energy) + " kWh"
-    : "";
+  const bat = compatibleBatteries.find((b: BatteryProduct) => b.id === batId)
+           || products.batteries.find((b: BatteryProduct) => b.id === batId);
 
-    useEffect(() => {
-  if (!batId) return;
-  const stillCompatible = compatibleBatteries.some((b: BatteryProduct) => b.id === batId);
-  if (!stillCompatible) {
-    setValue(`${prefix}.batteryProductId`, "");
-    setValue(`${prefix}.batteryQty`, "");
-  }
-// eslint-disable-next-line react-hooks/exhaustive-deps
-}, [invId]);
+  const batteryDays: number = watch(`${prefix}.batteryDays`) ?? (sysType === "hybrid" ? 0.5 : 1);
+  const reqBatKwh = usageNum > 0 && hasBattery ? (usageNum / 30) * batteryDays : 0;
 
+  const suggestedBatQty = bat && reqBatKwh > 0
+    ? Math.ceil(reqBatKwh / bat.usable_energy)
+    : null;
+
+  useEffect(() => {
+    if (!batId && compatibleBatteries.length > 0 && reqBatKwh > 0) {
+      setValue(`${prefix}.batteryProductId`, compatibleBatteries[0].id);
+    }
+    if (suggestedBatQty) {
+      setValue(`${prefix}.batteryQty`, String(suggestedBatQty));
+    }
+  }, [invId, reqBatKwh, batId, suggestedBatQty]);
 
   return (
-    <motion.div variants={{ initial: { opacity: 0, y: 8 }, animate: { opacity: 1, y: 0 } }}>
+    <div className="space-y-4">
       <Card>
-        <CardHeader className="pb-3">
+        <CardHeader className="pb-3 border-b border-border/50 bg-muted/20">
           <CardTitle className="flex items-center justify-between text-sm">
             <span className="text-base font-semibold text-primary">Option {idx + 1}</span>
-            <Badge variant="outline" className="text-xs capitalize">{sysType}</Badge>
+            <div className="flex items-center gap-2">
+              <Select value={sysType} onValueChange={(v) => {
+                setValue(`${prefix}.sysType`, v);
+                if (v === "ongrid") {
+                  setValue(`${prefix}.batteryProductId`, "");
+                  setValue(`${prefix}.batteryQty`, "");
+                }
+              }}>
+                <SelectTrigger className="h-7 w-auto gap-1.5 rounded-full border-primary/30 bg-background px-3 text-xs font-medium capitalize">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ongrid" className="text-xs">On-Grid</SelectItem>
+                  <SelectItem value="hybrid" className="text-xs">Hybrid (Grid + Battery)</SelectItem>
+                  <SelectItem value="hybrid-offgrid" className="text-xs">Hybrid (Off-grid)</SelectItem>
+                  <SelectItem value="offgrid" className="text-xs">Off-Grid</SelectItem>
+                </SelectContent>
+              </Select>
+              {onRemove && (
+                <Button type="button" variant="ghost" size="sm" onClick={onRemove} className="h-7 px-2 text-destructive hover:bg-destructive/10 hover:text-destructive">
+                  <Trash2 className="h-3.5 w-3.5" />
+                </Button>
+              )}
+            </div>
           </CardTitle>
         </CardHeader>
 
-        <CardContent className="space-y-6">
-
-          {/* ── Inverter ── */}
-          <div>
-            <div className="mb-3 flex items-center gap-2">
-              <Cpu className="h-3.5 w-3.5 text-blue-500" />
-              <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+        <CardContent className="space-y-4 pt-4">
+          <div className="rounded-xl border bg-slate-50/40 p-4 dark:bg-slate-900/40">
+            <div className="mb-4 flex items-center gap-2 border-b pb-3">
+              <Cpu className="h-4 w-4 text-blue-500" />
+              <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
                 Inverter
               </span>
             </div>
 
             <div className="grid gap-3 sm:grid-cols-3">
-              {/* Model select */}
               <div className="space-y-1.5 sm:col-span-1">
                 <Label className="text-xs">Inverter model</Label>
                 <Select
@@ -470,58 +503,33 @@ const bat = compatibleBatteries.find((b: BatteryProduct) => b.id === batId)
                     setValue(`${prefix}.panelQty`, "");
                   }}
                 >
-                  <SelectTrigger className="h-9 text-xs">
-                    <SelectValue placeholder="Select inverter…" />
+                  <SelectTrigger className="h-9 text-sm">
+                    <SelectValue placeholder="Select inverter" />
                   </SelectTrigger>
                   <SelectContent>
-                    {filteredInverters.length === 0 && (
-                      <SelectItem value="_none" disabled className="text-xs text-muted-foreground">
-                        No inverters for {sysType} in database
+                    {filteredInverters.map((i: InverterProduct) => (
+                      <SelectItem key={i.id} value={i.id} className="text-xs">
+                        {i.brand} {kwLabel(i.input_rated_power)} ({i.model})
                       </SelectItem>
-                    )}
-                    {filteredInverters
-                      .slice()
-                      .sort((a: InverterProduct, b: InverterProduct) =>
-                        a.input_rated_power - b.input_rated_power
-                      )
-                      .map((inv: InverterProduct) => {
-                        const kw = inv.input_rated_power / 1000;
-                        const inRange =
-                          globalRecLowKw != null &&
-                          globalRecHighKw != null &&
-                          kw >= globalRecLowKw &&
-                          kw <= globalRecHighKw;
-                        const isSuggested = globalSuggestion?.inverter.id === inv.id;
-                        return (
-                          <SelectItem key={inv.id} value={inv.id} className="text-xs">
-                            {inRange     ? "★ " : ""}
-                            {isSuggested && !inRange ? "→ " : ""}
-                            {inv.brand} {kwLabel(inv.input_rated_power)} {inv.phase_count} ({inv.model})
-                          </SelectItem>
-                        );
-                      })}
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
 
-              {/* Qty — editable inline */}
               <div className="space-y-1.5">
-  <Label className="text-xs">Quantity</Label>
-  <Input
-    {...register(`${prefix}.inverterQty`)}
-    type="number"
-    min={1}
-    className="h-9 text-sm"
-    placeholder={globalSuggestion && !userEditedQty ? String(globalSuggestion.qty) : "1"}
-    onChange={(e) => {
-      setUserEditedQty(true);
-      setValue(`${prefix}.inverterQty`, e.target.value);
-      setValue(`${prefix}.panelQty`, ""); // recalc panels when qty changes
-    }}
-  />
-</div>
+                <Label className="text-xs">Qty</Label>
+                <Input
+                  {...register(`${prefix}.inverterQty`)}
+                  type="number"
+                  min={1}
+                  className="h-9 text-sm"
+                  onChange={(e) => {
+                    register(`${prefix}.inverterQty`).onChange(e);
+                    setUserEditedQty(true);
+                  }}
+                />
+              </div>
 
-              {/* Total capacity display */}
               <div className="space-y-1.5">
                 <Label className="text-xs">Total capacity</Label>
                 <div className="flex h-9 items-center rounded-md border bg-muted px-3 text-sm text-muted-foreground">
@@ -535,8 +543,6 @@ const bat = compatibleBatteries.find((b: BatteryProduct) => b.id === batId)
               </div>
             </div>
 
-            {/* Oversize checkbox */}
-            {/* Oversize checkbox */}
             <div className="mt-2 flex items-center gap-2">
               <Checkbox
                 id={`oversize-${idx}`}
@@ -561,7 +567,6 @@ const bat = compatibleBatteries.find((b: BatteryProduct) => b.id === batId)
               </label>
             </div>
 
-            {/* Permitted power warning */}
             {sysType === "ongrid" && permittedPowerKw !== null && totalInvCapW > 0 && (
               <div className={`mt-3 flex items-start gap-2 rounded-lg border px-4 py-3 ${
                 powerExceeded
@@ -591,58 +596,58 @@ const bat = compatibleBatteries.find((b: BatteryProduct) => b.id === batId)
                       {totalInvCapKw} kW
                     </span>
                   </p>
-                  {powerExceeded && (
-                    <p className="text-xs text-destructive">
-                      This system capacity is not permitted by the utility provider with the current cutout current.
-                      Consider reducing the inverter size or increasing the cutout current.
-                    </p>
-                  )}
                 </div>
               </div>
             )}
 
+            {suggestion && globalRecLowKw && (
+              <div className="mt-3 flex items-start gap-2 rounded-lg border border-primary/20 bg-primary/5 px-4 py-2.5">
+                <Lightbulb className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                <div className="space-y-0.5">
+                  <p className="text-xs text-primary font-medium">
+                    Recommended: {globalRecLowKw} kW – {globalRecHighKw} kW
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {suggestion.reason === "historical" && (
+                      <>🕒 Based on past proposals: <span className="font-medium text-foreground">{suggestion.qty}× {kwLabel(suggestion.inverter.input_rated_power)} {suggestion.inverter.brand} ({suggestion.inverter.model})</span></>
+                    )}
+                    {suggestion.reason === "exact" && (
+                      <>✅ <span className="font-medium text-foreground">{suggestion.qty}× {kwLabel(suggestion.inverter.input_rated_power)} {suggestion.inverter.brand} ({suggestion.inverter.model})</span></>
+                    )}
+                    {suggestion.reason === "above" && (
+                      <>↑ Nearest: <span className="font-medium text-foreground">{suggestion.qty}× {kwLabel(suggestion.inverter.input_rated_power)} {suggestion.inverter.brand} ({suggestion.inverter.model})</span></>
+                    )}
+                    {suggestion.reason === "multiple_smaller" && (
+                      <>⚡ <span className="font-medium text-foreground">{suggestion.qty}× {kwLabel(suggestion.inverter.input_rated_power)} {suggestion.inverter.brand}</span> = {kwLabel(suggestion.totalKw * 1000)} total</>
+                    )}
+                  </p>
+                </div>
+              </div>
+            )}
           </div>
 
-          {/* ── Solar panels ── */}
-          <div>
-            <div className="mb-3 flex items-center gap-2">
-              <Zap className="h-3.5 w-3.5 text-amber-500" />
-              <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          <div className="rounded-xl border bg-slate-50/40 p-4 dark:bg-slate-900/40">
+            <div className="mb-4 flex items-center gap-2 border-b pb-3">
+              <Zap className="h-4 w-4 text-amber-500" />
+              <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
                 Solar panels
               </span>
             </div>
 
-            {/* {suggestedPanelQty && panel && (
-              <div className="mb-3 flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 dark:border-amber-900 dark:bg-amber-950/30">
-                <Lightbulb className="h-3.5 w-3.5 shrink-0 text-amber-600" />
-                <p className="text-xs text-amber-700 dark:text-amber-400">
-                  For{" "}
-                  <span className="font-bold">{totalInvCapKw} kW</span> total inverter
-                  capacity with{" "}
-                  <span className="font-bold">{panel.max_panel_output}W</span> panels —
-                  suggested:{" "}
-                  <span className="font-bold">{suggestedPanelQty} panels</span>.
-                </p>
-              </div>
-            )} */}
-
             <div className="grid gap-3 sm:grid-cols-3">
-              <div className="space-y-1.5">
+              <div className="space-y-1.5 sm:col-span-1">
                 <Label className="text-xs">Panel model</Label>
                 <Select
                   value={panelId}
-                  onValueChange={(v) => {
-                    setValue(`${prefix}.panelProductId`, v);
-                    setValue(`${prefix}.panelQty`, "");
-                  }}
+                  onValueChange={(v) => setValue(`${prefix}.panelProductId`, v)}
                 >
-                  <SelectTrigger className="h-9 text-xs">
-                    <SelectValue placeholder="Select panel…" />
+                  <SelectTrigger className="h-9 text-sm">
+                    <SelectValue placeholder="Select panel" />
                   </SelectTrigger>
                   <SelectContent>
                     {products.panels.map((p: PanelProduct) => (
                       <SelectItem key={p.id} value={p.id} className="text-xs">
-                        {p.brand} {p.max_panel_output_power}W ({p.model})
+                        {p.brand} {p.max_panel_output_power || (p as any).max_panel_output}W ({p.model})
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -650,18 +655,7 @@ const bat = compatibleBatteries.find((b: BatteryProduct) => b.id === batId)
               </div>
 
               <div className="space-y-1.5">
-                {/* <div className="flex items-center justify-between"> */}
-                  <Label className="text-xs">Quantity</Label>
-                  {/* {suggestedPanelQty && String(panelQty) !== String(suggestedPanelQty) && (
-                    <button
-                      type="button"
-                      className="text-[10px] text-primary underline"
-                      onClick={() => setValue(`${prefix}.panelQty`, String(suggestedPanelQty))}
-                    >
-                      Use {suggestedPanelQty}
-                    </button>
-                  )} */}
-                {/* </div> */}
+                <Label className="text-xs">Qty</Label>
                 <Input
                   {...register(`${prefix}.panelQty`)}
                   type="number"
@@ -671,28 +665,48 @@ const bat = compatibleBatteries.find((b: BatteryProduct) => b.id === batId)
                   placeholder={suggestedPanelQty ? `Suggested: ${suggestedPanelQty}` : "10"}
                 />
               </div>
-
-              {/* <div className="space-y-1.5">
-                <Label className="text-xs">Total capacity</Label>
-                <Input
-                  value={totalKw}
-                  readOnly
-                  className="h-9 bg-muted text-sm"
-                  placeholder="auto"
-                />
-              </div> */}
             </div>
           </div>
 
-          {/* ── Battery ── */}
-          {sysType !== "ongrid" && (
-            <div>
-              <div className="mb-3 flex items-center gap-2">
-                <BatteryIcon className="h-3.5 w-3.5 text-green-600" />
-                <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          {hasBattery && (
+            <div className="rounded-xl border bg-slate-50/40 p-4 dark:bg-slate-900/40">
+              <div className="mb-4 flex items-center gap-2 border-b pb-3">
+                <BatteryIcon className="h-4 w-4 text-green-600" />
+                <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
                   Battery
                 </span>
               </div>
+
+              {usageNum > 0 && (
+                <div className="mb-4 rounded-lg border bg-muted/30 px-4 py-3">
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+                    <div className="flex-1 w-full space-y-2">
+                      <div className="flex justify-between text-xs text-muted-foreground">
+                        <span>{sysType === "hybrid" ? "Night time (12h)" : "1 Day"}</span>
+                        <span>{sysType === "hybrid" ? "3 Days" : "7 Days+"}</span>
+                      </div>
+                      <input
+                        type="range"
+                        min={sysType === "hybrid" ? 0.5 : 1}
+                        max={sysType === "hybrid" ? 3 : 7}
+                        step={sysType === "hybrid" ? 0.5 : 1}
+                        value={batteryDays}
+                        onChange={(e) => setValue(`${prefix}.batteryDays`, parseFloat(e.target.value))}
+                        className="w-full accent-green-600 cursor-pointer"
+                      />
+                      <div className="flex justify-between items-center">
+                        <span className="text-[10px] text-muted-foreground font-medium">
+                          {batteryDays === 0.5 ? "Night time only" : `${batteryDays} Day${batteryDays > 1 ? "s" : ""}${batteryDays === 7 ? "+" : ""}`}
+                        </span>
+                        <span className="text-xs font-bold text-green-700 dark:text-green-500">
+                          {(usageNum / 30 * batteryDays).toFixed(1) || 0} kWh required
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               <div className="grid gap-3 sm:grid-cols-3">
                 <div className="space-y-1.5 sm:col-span-1">
                   <Label className="text-xs">Battery model</Label>
@@ -700,23 +714,23 @@ const bat = compatibleBatteries.find((b: BatteryProduct) => b.id === batId)
                     value={batId}
                     onValueChange={(v) => setValue(`${prefix}.batteryProductId`, v)}
                   >
-                    <SelectTrigger className="h-9 text-xs">
-                      <SelectValue placeholder="Select battery…" />
+                    <SelectTrigger className="h-9 text-sm">
+                      <SelectValue placeholder="Select battery" />
                     </SelectTrigger>
                     <SelectContent>
                       {compatibleBatteries.length === 0 && (
-  <SelectItem value="_none" disabled className="text-xs text-muted-foreground">
-    No compatible batteries for selected inverter
-  </SelectItem>
-)}
-{compatibleBatteries.map((b: BatteryProduct) => (
-  <SelectItem key={b.id} value={b.id} className="text-xs">
-    {b.brand} {b.usable_energy} kWh ({b.model})
-    <span className="ml-1 text-muted-foreground">
-      ({b.battery_operating_voltage})
-    </span>
-  </SelectItem>
-))}
+                        <SelectItem value="_none" disabled className="text-xs text-muted-foreground">
+                          No compatible batteries for selected inverter
+                        </SelectItem>
+                      )}
+                      {compatibleBatteries.map((b: BatteryProduct) => (
+                        <SelectItem key={b.id} value={b.id} className="text-xs">
+                          {b.brand} {b.usable_energy} kWh ({b.model})
+                          <span className="ml-1 text-muted-foreground">
+                            ({b.battery_operating_voltage})
+                          </span>
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
@@ -729,21 +743,11 @@ const bat = compatibleBatteries.find((b: BatteryProduct) => b.id === batId)
                     className="h-9 text-sm"
                   />
                 </div>
-                {/* <div className="space-y-1.5">
-                  <Label className="text-xs">Total capacity</Label>
-                  <Input
-                    value={totalKwh}
-                    readOnly
-                    className="h-9 bg-muted text-sm"
-                    placeholder="auto"
-                  />
-                </div> */}
               </div>
             </div>
           )}
-
         </CardContent>
       </Card>
-    </motion.div>
+    </div>
   );
 }

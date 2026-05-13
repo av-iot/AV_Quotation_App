@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import { doc, getDoc } from "firebase/firestore";
+import { doc, getDoc, collection, getDocs } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { Proposal } from "@/types";
 import { Loader2, Printer } from "lucide-react";
@@ -18,7 +18,39 @@ export default function PrintProposalPage() {
       try {
         const snap = await getDoc(doc(db, "proposals", id));
         if (snap.exists()) {
-          setProposal({ id: snap.id, ...snap.data() } as Proposal);
+          const propData = { id: snap.id, ...snap.data() } as Proposal;
+          
+          // Fetch products to resolve names if needed
+          const prodSnap = await getDocs(collection(db, "products"));
+          const productsMap = new Map();
+          prodSnap.docs.forEach((d) => productsMap.set(d.id, d.data()));
+          
+          // Enrich proposal options with product names if missing
+          propData.options.forEach((opt) => {
+            if (opt.inverter.productId && (!opt.inverter.brand || opt.inverter.model === opt.inverter.productId)) {
+              const p = productsMap.get(opt.inverter.productId);
+              if (p) {
+                opt.inverter.brand = p.brand;
+                opt.inverter.model = p.model;
+              }
+            }
+            if (opt.panel.productId && (!opt.panel.brand || opt.panel.model === opt.panel.productId)) {
+              const p = productsMap.get(opt.panel.productId);
+              if (p) {
+                opt.panel.brand = p.brand;
+                opt.panel.model = p.model;
+              }
+            }
+            if (opt.battery?.productId && (!opt.battery.brand || opt.battery.model === opt.battery.productId)) {
+              const p = productsMap.get(opt.battery.productId);
+              if (p) {
+                opt.battery.brand = p.brand;
+                opt.battery.model = p.model;
+              }
+            }
+          });
+
+          setProposal(propData);
           // Wait a bit for render then print
           setTimeout(() => {
             window.print();

@@ -26,6 +26,7 @@ export async function GET(req: NextRequest) {
 
 // ─── POST /api/proposals ──────────────────────────────────────────────────────
 export async function POST(req: NextRequest) {
+  console.log("POST /api/proposals called");
   const token = req.headers.get("authorization")?.replace("Bearer ", "");
   if (!token) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
@@ -33,7 +34,13 @@ export async function POST(req: NextRequest) {
   if (!decoded) return NextResponse.json({ error: "Invalid token" }, { status: 401 });
 
   const body: ProposalFormData & { status: string } = await req.json();
+  console.log("POST body:", JSON.stringify(body, null, 2));
   const db = adminDb();
+
+  // Fetch all active products to look up details
+  const prodSnap = await db.collection("products").where("active", "==", true).get();
+  const productsMap = new Map<string, any>();
+  prodSnap.docs.forEach((d) => productsMap.set(d.id, d.data()));
 
   // Generate sequential numbers starting from 50000
   const counterRef = db.collection("system").doc("counters");
@@ -54,7 +61,7 @@ export async function POST(req: NextRequest) {
   });
 
   // Build structured proposal from form data
-  const proposal = buildProposalFromForm(body, decoded.uid);
+  const proposal = buildProposalFromForm(body, decoded.uid, productsMap);
   
   // Override form-provided qtnNo with our generated sequence
   proposal.qtnNo = qtnNo;

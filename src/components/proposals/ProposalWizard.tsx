@@ -28,6 +28,8 @@ const STEPS = [
 ];
 
 const defaultOption = {
+  sysType: "ongrid" as const,
+  batteryDays: 1,
   panelProductId: "",
   panelQty: "",
   inverterProductId: "",
@@ -63,6 +65,7 @@ const defaultValues: ProposalFormData = {
   powerScheme: "Net Accounting",
   numOptions: 1,
   monthlyUsage: "",
+  batteryDays: 1,
   options: [{ ...defaultOption }, { ...defaultOption }],
   pay1: "50",
   pay2: "40",
