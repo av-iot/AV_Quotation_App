@@ -27,9 +27,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, (fbUser) => {
+    const unsub = onAuthStateChanged(auth, async (fbUser) => {
       if (fbUser) {
         setFirebaseUser(fbUser);
+        
+        // Wait for session to be set before setting user state to prevent premature redirects
+        try {
+          const idToken = await fbUser.getIdToken();
+          await fetch("/api/auth/session", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ idToken }),
+          });
+        } catch (err) {}
+
         setUser({
           uid: fbUser.uid,
           email: fbUser.email!,
@@ -38,18 +49,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           source: "google",
           role: "engineer",
         });
-        // Fire and forget — never block loading on this
-        fbUser.getIdToken().then((idToken) => {
-          fetch("/api/auth/session", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ idToken }),
-          }).catch(() => {});
-        });
       } else {
         setFirebaseUser(null);
         setUser(null);
-        fetch("/api/auth/session", { method: "DELETE" }).catch(() => {});
+        try {
+          await fetch("/api/auth/session", { method: "DELETE" });
+        } catch (err) {}
       }
       // Always runs — loading will never get stuck
       setLoading(false);

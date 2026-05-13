@@ -12,6 +12,17 @@ export const metadata: Metadata = {
   description: "Professional solar PV proposal and quotation management",
 };
 
+export const viewport: import("next").Viewport = {
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
+    { media: "(prefers-color-scheme: dark)", color: "#09090b" },
+  ],
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  viewportFit: "cover",
+};
+
 export default function RootLayout({
   children,
 }: {

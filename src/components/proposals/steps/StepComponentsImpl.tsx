@@ -180,8 +180,70 @@ all.forEach((p) => { cache[p.id] = p; });
     );
   }
 
+  const monthlyUsage = watch("monthlyUsage") || "";
+  const usageNum     = parseFloat(monthlyUsage) || 0;
+
+  const rawLow    = usageNum > 0 ? usageNum / DIVISOR_HIGH : null;
+  const rawHigh   = usageNum > 0 ? usageNum / DIVISOR_LOW  : null;
+  const recLowKw  = rawLow  != null ? Math.ceil(rawLow)  : null;
+  const recHighKw = rawHigh != null ? Math.ceil(rawHigh) : null;
+
+  const filteredInverters = filterInverters(products.inverters, sysType);
+  const suggestion = recLowKw && recHighKw ? suggestInverter(filteredInverters, recLowKw, recHighKw) : null;
+
   return (
     <motion.div variants={stagger} initial="initial" animate="animate" className="space-y-4">
+      {/* ── Global Customer Usage ── */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2 text-sm">
+            <Info className="h-4 w-4 text-primary" />
+            <span className="text-base font-semibold text-primary">Customer Usage</span>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-4 sm:grid-cols-3">
+            <div className="space-y-1.5">
+              <Label className="text-xs">Monthly usage (kWh)</Label>
+              <Input
+                {...register("monthlyUsage")}
+                type="number"
+                min={0}
+                className="h-9 text-sm"
+                placeholder="e.g. 600"
+              />
+            </div>
+
+            {/* Recommendation banner */}
+            {recLowKw != null && recHighKw != null && (
+              <div className="sm:col-span-2 flex items-start gap-2 rounded-lg border border-primary/20 bg-primary/5 px-4 py-2.5">
+                <Lightbulb className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                <div className="space-y-1">
+                  <p className="text-xs text-primary">
+                    Based on <span className="font-bold">{monthlyUsage} kWh/month</span> — recommended inverter: <span className="font-bold">{recLowKw} kW – {recHighKw} kW</span>
+                  </p>
+
+                  {/* Show suggestion detail */}
+                  {suggestion && (
+                    <p className="text-xs text-muted-foreground">
+                      {suggestion.reason === "exact" && (
+                        <>✅ Matched: <span className="font-medium text-foreground">{suggestion.qty}× {kwLabel(suggestion.inverter.input_rated_power)} {suggestion.inverter.brand} ({suggestion.inverter.model})</span></>
+                      )}
+                      {suggestion.reason === "above" && (
+                        <>↑ Nearest above range: <span className="font-medium text-foreground">{suggestion.qty}× {kwLabel(suggestion.inverter.input_rated_power)} {suggestion.inverter.brand} ({suggestion.inverter.model})</span></>
+                      )}
+                      {suggestion.reason === "multiple_smaller" && (
+                        <>⚡ No single match — suggest <span className="font-medium text-foreground">{suggestion.qty}× {kwLabel(suggestion.inverter.input_rated_power)} {suggestion.inverter.brand} ({suggestion.inverter.model})</span> = <span className="font-medium text-foreground">{kwLabel(suggestion.totalKw * 1000)} total</span></>
+                      )}
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
       {Array.from({ length: numOptions }, (_, idx) => (
         <OptionBlock
           key={idx}
@@ -191,6 +253,9 @@ all.forEach((p) => { cache[p.id] = p; });
           register={register}
           watch={watch}
           setValue={setValue}
+          globalRecLowKw={recLowKw}
+          globalRecHighKw={recHighKw}
+          globalSuggestion={suggestion}
         />
       ))}
     </motion.div>
@@ -258,49 +323,33 @@ function EditableValue({
 }
 
 // ── Option block ─────────────────────────────────────────────────────────────
-function OptionBlock({  idx, sysType, products, register, watch, setValue }: any) {
+function OptionBlock({  idx, sysType, products, register, watch, setValue, globalRecLowKw, globalRecHighKw, globalSuggestion }: any) {
   const prefix = `options.${idx}` as const;
-
-  // ── Monthly usage ─────────────────────────────────────────────────────────
-  const monthlyUsage = watch(`${prefix}.monthlyUsage`) || "";
-  const usageNum     = parseFloat(monthlyUsage) || 0;
-
-  const rawLow    = usageNum > 0 ? usageNum / DIVISOR_HIGH : null;
-  const rawHigh   = usageNum > 0 ? usageNum / DIVISOR_LOW  : null;
-const recLowKw  = rawLow  != null ? Math.ceil(rawLow)  : null;
-const recHighKw = rawHigh != null ? Math.ceil(rawHigh) : null;
 
   // ── Inverter ──────────────────────────────────────────────────────────────
   const filteredInverters = filterInverters(products.inverters, sysType);
-const invId             = watch(`${prefix}.inverterProductId`) || "";
-const invQtyRaw         = watch(`${prefix}.inverterQty`) || "";
-const oversize          = watch(`${prefix}.oversize`) || false;
-const [userEditedQty, setUserEditedQty] = useState(false);
+  const invId             = watch(`${prefix}.inverterProductId`) || "";
+  const invQtyRaw         = watch(`${prefix}.inverterQty`) || "";
+  const oversize          = watch(`${prefix}.oversize`) || false;
+  const [userEditedQty, setUserEditedQty] = useState(false);
 
   const selectedInv = filteredInverters.find(
     (i: InverterProduct) => i.id === invId
   );
 
-  // Compute suggestion
-  const suggestion: InverterSuggestion | null =
-    recLowKw && recHighKw
-      ? suggestInverter(filteredInverters, recLowKw, recHighKw)
-      : null;
-
-  // Auto-apply suggestion when usage changes and no manual selection yet
-// Auto-apply suggestion only once when usage is first entered
-useEffect(() => {
-    if (!suggestion) return;
+  // Auto-apply suggestion only once when usage is first entered
+  useEffect(() => {
+    if (!globalSuggestion) return;
     if (!invId) {
-      setValue(`${prefix}.inverterProductId`, suggestion.inverter.id);
+      setValue(`${prefix}.inverterProductId`, globalSuggestion.inverter.id);
       setValue(`${prefix}.panelQty`, "");
     }
     // Only auto-fill qty if user has NOT manually edited it
     if (!userEditedQty) {
-      setValue(`${prefix}.inverterQty`, String(suggestion.qty));
+      setValue(`${prefix}.inverterQty`, String(globalSuggestion.qty));
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [recLowKw, recHighKw, suggestion?.inverter.id]);
+  }, [globalRecLowKw, globalRecHighKw, globalSuggestion?.inverter.id]);
 
 
   // Total inverter capacity (single unit)
@@ -401,74 +450,6 @@ const bat = compatibleBatteries.find((b: BatteryProduct) => b.id === batId)
 
         <CardContent className="space-y-6">
 
-          {/* ── Monthly usage ── */}
-          <div>
-            <div className="mb-2 flex items-center gap-2">
-              <Info className="h-3.5 w-3.5 text-primary" />
-              <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                Customer usage
-              </span>
-            </div>
-            <div className="grid gap-3 sm:grid-cols-3">
-              <div className="space-y-1.5">
-                <Label className="text-xs">Monthly usage (kWh)</Label>
-                <Input
-                  {...register(`${prefix}.monthlyUsage`)}
-                  type="number"
-                  min={0}
-                  className="h-9 text-sm"
-                  placeholder="e.g. 600"
-                />
-              </div>
-
-              {/* Recommendation banner */}
-              {recLowKw != null && recHighKw != null && (
-                <div className="sm:col-span-2 flex items-start gap-2 rounded-lg border border-primary/20 bg-primary/5 px-4 py-2.5">
-                  <Lightbulb className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-                  <div className="space-y-1">
-                    <p className="text-xs text-primary">
-                      Based on{" "}
-                      <span className="font-bold">{monthlyUsage} kWh/month</span>{" "}
-                      — recommended inverter:{" "}
-                      <span className="font-bold">{recLowKw} kW – {recHighKw} kW</span>
-                    </p>
-
-                    {/* Show suggestion detail */}
-                    {suggestion && (
-                      <p className="text-xs text-muted-foreground">
-                        {suggestion.reason === "exact" && (
-                          <>
-                            ✅ Matched:{" "}
-                            <span className="font-medium text-foreground">
-                              {suggestion.qty}× {kwLabel(suggestion.inverter.input_rated_power)} {suggestion.inverter.brand} ({suggestion.inverter.model})
-                            </span>
-                          </>
-                        )}
-                        {suggestion.reason === "above" && (
-                          <>
-                            ↑ Nearest above range:{" "}
-                            <span className="font-medium text-foreground">
-                              {suggestion.qty}× {kwLabel(suggestion.inverter.input_rated_power)} {suggestion.inverter.brand} ({suggestion.inverter.model})
-                            </span>
-                          </>
-                        )}
-                        {suggestion.reason === "multiple_smaller" && (
-                          <>
-                            ⚡ No single match — suggest{" "}
-                            <span className="font-medium text-foreground">
-                              {suggestion.qty}× {kwLabel(suggestion.inverter.input_rated_power)} {suggestion.inverter.brand} ({suggestion.inverter.model})
-                            </span>{" "}
-                            = <span className="font-medium text-foreground">{kwLabel(suggestion.totalKw * 1000)} total</span>
-                          </>
-                        )}
-                      </p>
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-
           {/* ── Inverter ── */}
           <div>
             <div className="mb-3 flex items-center gap-2">
@@ -506,11 +487,11 @@ const bat = compatibleBatteries.find((b: BatteryProduct) => b.id === batId)
                       .map((inv: InverterProduct) => {
                         const kw = inv.input_rated_power / 1000;
                         const inRange =
-                          recLowKw != null &&
-                          recHighKw != null &&
-                          kw >= recLowKw &&
-                          kw <= recHighKw;
-                        const isSuggested = suggestion?.inverter.id === inv.id;
+                          globalRecLowKw != null &&
+                          globalRecHighKw != null &&
+                          kw >= globalRecLowKw &&
+                          kw <= globalRecHighKw;
+                        const isSuggested = globalSuggestion?.inverter.id === inv.id;
                         return (
                           <SelectItem key={inv.id} value={inv.id} className="text-xs">
                             {inRange     ? "★ " : ""}
@@ -531,7 +512,7 @@ const bat = compatibleBatteries.find((b: BatteryProduct) => b.id === batId)
     type="number"
     min={1}
     className="h-9 text-sm"
-    placeholder={suggestion && !userEditedQty ? String(suggestion.qty) : "1"}
+    placeholder={globalSuggestion && !userEditedQty ? String(globalSuggestion.qty) : "1"}
     onChange={(e) => {
       setUserEditedQty(true);
       setValue(`${prefix}.inverterQty`, e.target.value);

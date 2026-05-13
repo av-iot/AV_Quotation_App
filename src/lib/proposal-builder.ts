@@ -55,6 +55,7 @@ export function buildProposalFromForm(
       phone: form.phone,
       ...(form.phone2 ? { phone2: form.phone2 } : {}),
       email: form.email,
+      sendFormat: form.sendFormat || [],
     },
     sysType: form.sysType,
     utility: form.utility,

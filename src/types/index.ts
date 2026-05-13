@@ -138,11 +138,13 @@ export interface CustomerInfo {
   phone: string;
   phone2?: string;
   email: string;
+  sendFormat?: string[];
 }
 
   export interface Proposal {
     id: string;
     qtnNo: string;
+    propNo?: string;
     date: string;           // ISO date string
     customer: CustomerInfo;
     sysType: SystemType;
@@ -218,14 +220,16 @@ export interface ProposalFormData {
   phone2: string;
   email: string;
   date: string;
+  sendFormat: string[];
   // Step 2 – site
   sysType: SystemType;
   utility: "CEB" | "LECO";
   phase: Phase;
   roofType: string;
-   cutoutCurrent: string;
+  cutoutCurrent: string;
   powerScheme: string;
   mountType: "roof" | "ground";
+  monthlyUsage: string;
   numOptions: 1 | 2;
   // Step 3 – options (components)
   options: OptionFormData[];
@@ -244,7 +248,6 @@ export interface OptionFormData {
   batteryProductId?: string;
   batteryQty?: string;
   coo: string;
-  monthlyUsage: string;
   oversize: boolean;
   estOutput: string;
   sysPrice: string;
