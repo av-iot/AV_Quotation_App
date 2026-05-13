@@ -1,0 +1,93 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 84% 4.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 84% 4.9%;
+    --primary: 142 71% 28%;          /* #1a6e3a — Alta Vision green */
+    --primary-foreground: 0 0% 100%;
+    --secondary: 210 40% 96.1%;
+    --secondary-foreground: 222.2 47.4% 11.2%;
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+    --accent: 142 55% 92%;           /* light green tint */
+    --accent-foreground: 142 71% 20%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 142 71% 28%;
+    --radius: 0.5rem;
+    --av-green: #1a6e3a;
+    --av-green-light: #d5e8d4;
+    --av-green-dark: #0f4424;
+  }
+
+  .dark {
+    --background: 222.2 84% 4.9%;
+    --foreground: 210 40% 98%;
+    --card: 222.2 84% 4.9%;
+    --card-foreground: 210 40% 98%;
+    --popover: 222.2 84% 4.9%;
+    --popover-foreground: 210 40% 98%;
+    --primary: 142 60% 45%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 217.2 32.6% 17.5%;
+    --secondary-foreground: 210 40% 98%;
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
+    --accent: 142 40% 18%;
+    --accent-foreground: 142 55% 80%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+    --ring: 142 60% 45%;
+    --av-green: #2e9d5e;
+    --av-green-light: #1a3d29;
+    --av-green-dark: #a7d9be;
+  }
+}
+
+@layer base {
+  * { @apply border-border; }
+  body { @apply bg-background text-foreground; }
+}
+
+/* ─── Framer Motion page transitions ─────────────────────────────── */
+.page-enter {
+  opacity: 0;
+  transform: translateY(12px);
+}
+.page-enter-active {
+  opacity: 1;
+  transform: translateY(0);
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+/* ─── Sidebar ──────────────────────────────────────────────────────── */
+.sidebar-link {
+  @apply flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium
+    text-muted-foreground transition-all duration-200
+    hover:bg-accent hover:text-accent-foreground;
+}
+.sidebar-link.active {
+  @apply bg-primary/10 text-primary;
+}
+
+/* ─── Step indicator ───────────────────────────────────────────────── */
+.step-dot {
+  @apply h-2.5 w-2.5 rounded-full bg-muted transition-all duration-300;
+}
+.step-dot.active {
+  @apply w-6 bg-primary;
+}
+.step-dot.done {
+  @apply bg-primary/60;
+}

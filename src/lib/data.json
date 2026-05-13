@@ -1,0 +1,11 @@
+{
+  "sizing": {
+    "divisor_low": 100,
+    "divisor_high": 120,
+    "description": "Monthly kWh divided by these values gives the recommended inverter kW range"
+  },
+  "grid": {
+    "home_voltage": 230,
+    "description": "Standard home voltage in Sri Lanka used for permitted power calculation"
+  }
+}
