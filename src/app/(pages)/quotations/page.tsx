@@ -25,7 +25,7 @@ const STATUS_CONFIG: Record<QuotationStatus, { label: string; variant: "default"
 };
 
 const fmtRs = (n: number) =>
-  "Rs. " + n.toLocaleString("en-US", { minimumFractionDigits: 2 });
+  "Rs. " + n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 export default function QuotationsPage() {
   const { firebaseUser } = useAuth();

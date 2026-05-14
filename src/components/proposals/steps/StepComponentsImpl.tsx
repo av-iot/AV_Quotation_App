@@ -37,6 +37,7 @@ function filterInverters(inverters: InverterProduct[], sysType: string): Inverte
     if (sysType === "offgrid") return t === "offgrid" || t === "hybrid";
     if (sysType === "hybrid")  return t === "hybrid";
     if (sysType === "hybrid-offgrid") return t === "offgrid" || t === "hybrid";
+    if (sysType === "grid-backup") return t === "hybrid" || t === "offgrid";
     return true;
   });
 }
@@ -465,14 +466,15 @@ function OptionBlock({ idx, products, register, watch, setValue, globalRecLowKw,
                   setValue(`${prefix}.batteryQty`, "");
                 }
               }}>
-                <SelectTrigger className="h-7 w-auto gap-1.5 rounded-full border-primary/30 bg-background px-3 text-xs font-medium capitalize">
+                <SelectTrigger className="h-7 w-auto gap-1.5 rounded-full border-primary/30 bg-background px-3 text-xs font-medium">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="ongrid" className="text-xs">On-Grid</SelectItem>
-                  <SelectItem value="hybrid" className="text-xs">Hybrid (Grid + Battery)</SelectItem>
-                  <SelectItem value="hybrid-offgrid" className="text-xs">Hybrid (Off-grid)</SelectItem>
-                  <SelectItem value="offgrid" className="text-xs">Off-Grid</SelectItem>
+                  <SelectItem value="ongrid" className="text-xs">On-Grid (Solar + Grid)</SelectItem>
+                  <SelectItem value="hybrid" className="text-xs">Hybrid (Solar + Grid + Battery)</SelectItem>
+                  <SelectItem value="hybrid-offgrid" className="text-xs">Hybrid (Solar + Battery - No Grid)</SelectItem>
+                  <SelectItem value="offgrid" className="text-xs">Off-Grid (Solar + Battery)</SelectItem>
+                  <SelectItem value="grid-backup" className="text-xs">Grid Backup (Grid + Battery - No Solar)</SelectItem>
                 </SelectContent>
               </Select>
               {onRemove && (
@@ -626,47 +628,49 @@ function OptionBlock({ idx, products, register, watch, setValue, globalRecLowKw,
             )}
           </div>
 
-          <div className="rounded-xl border bg-slate-50/40 p-4 dark:bg-slate-900/40">
-            <div className="mb-4 flex items-center gap-2 border-b pb-3">
-              <Zap className="h-4 w-4 text-amber-500" />
-              <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                Solar panels
-              </span>
-            </div>
-
-            <div className="grid gap-3 sm:grid-cols-3">
-              <div className="space-y-1.5 sm:col-span-1">
-                <Label className="text-xs">Panel model</Label>
-                <Select
-                  value={panelId}
-                  onValueChange={(v) => setValue(`${prefix}.panelProductId`, v)}
-                >
-                  <SelectTrigger className="h-9 text-sm">
-                    <SelectValue placeholder="Select panel" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {products.panels.map((p: PanelProduct) => (
-                      <SelectItem key={p.id} value={p.id} className="text-xs">
-                        {p.brand} {p.max_panel_output_power || (p as any).max_panel_output}W ({p.model})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+          {sysType !== "grid-backup" && (
+            <div className="rounded-xl border bg-slate-50/40 p-4 dark:bg-slate-900/40">
+              <div className="mb-4 flex items-center gap-2 border-b pb-3">
+                <Zap className="h-4 w-4 text-amber-500" />
+                <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                  Solar panels
+                </span>
               </div>
 
-              <div className="space-y-1.5">
-                <Label className="text-xs">Qty</Label>
-                <Input
-                  {...register(`${prefix}.panelQty`)}
-                  type="number"
-                  min={1}
-                  max={200}
-                  className="h-9 text-sm"
-                  placeholder={suggestedPanelQty ? `Suggested: ${suggestedPanelQty}` : "10"}
-                />
+              <div className="grid gap-3 sm:grid-cols-3">
+                <div className="space-y-1.5 sm:col-span-1">
+                  <Label className="text-xs">Panel model</Label>
+                  <Select
+                    value={panelId}
+                    onValueChange={(v) => setValue(`${prefix}.panelProductId`, v)}
+                  >
+                    <SelectTrigger className="h-9 text-sm">
+                      <SelectValue placeholder="Select panel" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {products.panels.map((p: PanelProduct) => (
+                        <SelectItem key={p.id} value={p.id} className="text-xs">
+                          {p.brand} {p.max_panel_output_power || (p as any).max_panel_output}W ({p.model})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Qty</Label>
+                  <Input
+                    {...register(`${prefix}.panelQty`)}
+                    type="number"
+                    min={1}
+                    max={200}
+                    className="h-9 text-sm"
+                    placeholder={suggestedPanelQty ? `Suggested: ${suggestedPanelQty}` : "10"}
+                  />
+                </div>
               </div>
             </div>
-          </div>
+          )}
 
           {hasBattery && (
             <div className="rounded-xl border bg-slate-50/40 p-4 dark:bg-slate-900/40">

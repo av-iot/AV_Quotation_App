@@ -10,7 +10,7 @@ export interface AppUser {
 
 // ─── Products / catalog ──────────────────────────────────────────────────────
 export type ProductType = "panel" | "inverter" | "battery";
-export type SystemType = "ongrid" | "hybrid" | "hybrid-offgrid" | "offgrid";
+export type SystemType = "ongrid" | "hybrid" | "hybrid-offgrid" | "offgrid" | "grid-backup";
 export type Phase = "1" | "3";
 export type InverterType = "ongrid" | "hybrid" | "offgrid";
 
@@ -242,6 +242,8 @@ export interface ProposalFormData {
   pay2: string;
   pay3: string;
   extraNotes: string;
+  cebCharges?: string;
+  validityPeriod?: string;
 }
 
 export interface OptionFormData {
@@ -262,6 +264,11 @@ export interface OptionFormData {
   discount: string;
   totalPrice: string;
   specialStructNote: boolean;
+  afterSalesPeriod?: string;
+  servicesPerYear?: string;
+  expectedGen?: string;
+  hasShading?: boolean;
+  shadingReduction?: string;
 }
 // ─── API responses ────────────────────────────────────────────────────────────
 export interface ApiResponse<T> {

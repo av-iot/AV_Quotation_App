@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   FileText, Receipt, LayoutDashboard, Settings,
@@ -46,8 +46,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   }, []);
   
   const pathname = usePathname();
+  const router = useRouter();
   const { theme, setTheme } = useTheme();
-  const { user, signOut } = useAuth();
+  const { user, loading, signOut } = useAuth();
 
   const handleInteract = () => {
     setShowToggle(true);
@@ -62,6 +63,24 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       if (timerRef.current) clearTimeout(timerRef.current);
     };
   }, []);
+
+  useEffect(() => {
+    if (!loading && !user) {
+      router.push("/login");
+    }
+  }, [loading, user, router]);
+
+  if (loading) {
+    return (
+      <div className="flex h-[100dvh] items-center justify-center bg-background">
+        <div className="text-muted-foreground">Loading...</div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return null;
+  }
 
   const sidebarW = collapsed ? 68 : 240;
 

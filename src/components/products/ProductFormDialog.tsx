@@ -58,8 +58,8 @@ function numericFields(type: ProductType, data: any, invType: InverterType) {
       mppt_count: Number(data.mppt_count),
       warranty: Number(data.warranty),
       qty: Number(data.qty),
-      buy_price: Number(data.buy_price),
-      sell_price: Number(data.sell_price),
+      buy_price: Number(data.buy_price).toFixed(2),
+      sell_price: Number(data.sell_price).toFixed(2),
     };
     if (invType === "hybrid" || invType === "offgrid") {
       return {
@@ -81,8 +81,8 @@ function numericFields(type: ProductType, data: any, invType: InverterType) {
       cycle_count: Number(data.cycle_count),
       warranty: Number(data.warranty),
       qty: Number(data.qty),
-      buy_price: Number(data.buy_price),
-      sell_price: Number(data.sell_price),
+      buy_price: Number(data.buy_price).toFixed(2),
+      sell_price: Number(data.sell_price).toFixed(2),
     };
   }
   if (type === "panel") {
@@ -95,8 +95,8 @@ function numericFields(type: ProductType, data: any, invType: InverterType) {
       length: Number(data.length),
       warranty: Number(data.warranty),
       qty: Number(data.qty),
-      buy_price: Number(data.buy_price),
-      sell_price: Number(data.sell_price),
+      buy_price: Number(data.buy_price).toFixed(2),
+      sell_price: Number(data.sell_price).toFixed(2),
     };
   }
   return {};

@@ -7,7 +7,8 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
-import { DollarSign, Calculator } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { DollarSign, Calculator, Sun } from "lucide-react";
 import { motion } from "framer-motion";
 
 const fadeUp = { initial: { opacity: 0, y: 8 }, animate: { opacity: 1, y: 0, transition: { duration: 0.2 } } };
@@ -15,7 +16,7 @@ const fadeUp = { initial: { opacity: 0, y: 8 }, animate: { opacity: 1, y: 0, tra
 const fmtRs = (v: number | string) => {
   const n = Number(v);
   if (!v || isNaN(n)) return "";
-  return "Rs. " + n.toLocaleString("en-US", { minimumFractionDigits: 2 });
+  return "Rs. " + n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 };
 
 export default function StepPricing({ onNext }: { onNext: () => void }) {
@@ -58,11 +59,49 @@ export default function StepPricing({ onNext }: { onNext: () => void }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pay1Raw, pay2Raw, pay3Raw]);
 
+  const cebChargesRaw = watch("cebCharges");
+
+  useEffect(() => {
+    if (typeof window !== "undefined" && cebChargesRaw) {
+      localStorage.setItem("cebCharges", cebChargesRaw);
+    }
+  }, [cebChargesRaw]);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const stored = localStorage.getItem("cebCharges");
+      if (stored && !watch("cebCharges")) {
+        setValue("cebCharges", stored);
+      }
+    }
+  }, [setValue, watch]);
+
   return (
     <motion.div initial="initial" animate="animate" className="space-y-4">
       {Array.from({ length: numOptions }, (_, idx) => (
         <OptionPricing key={idx} idx={idx} sysType={sysType} />
       ))}
+
+      {/* ── Additional charges ── */}
+      <motion.div variants={fadeUp}>
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Additional charges</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-1.5">
+              <Label className="text-sm">CEB chargers (Rs.)</Label>
+              <Input
+                {...register("cebCharges")}
+                type="number"
+                placeholder="0"
+                className="h-9"
+              />
+              <p className="text-xs text-muted-foreground">This value will be saved for future use.</p>
+            </div>
+          </CardContent>
+        </Card>
+      </motion.div>
 
       {/* ── Payment terms ── */}
       <motion.div variants={fadeUp}>
@@ -136,6 +175,23 @@ export default function StepPricing({ onNext }: { onNext: () => void }) {
             </div>
 
             <div className="space-y-1.5">
+              <Label className="text-sm">Validity period</Label>
+              <Select
+                value={watch("validityPeriod") || "14"}
+                onValueChange={(v) => setValue("validityPeriod", v)}
+              >
+                <SelectTrigger className="h-9 text-sm">
+                  <SelectValue placeholder="Select validity period" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="7">7 days</SelectItem>
+                  <SelectItem value="14">14 days</SelectItem>
+                  <SelectItem value="30">30 days</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-1.5">
               <Label>Additional notes (optional)</Label>
               <Textarea
                 {...register("extraNotes")}
@@ -166,7 +222,10 @@ function OptionPricing({ idx, sysType }: { idx: number; sysType: string }) {
   const inverterProductId= watch(`${prefix}.inverterProductId`);
   const inverterQty      = parseInt(watch(`${prefix}.inverterQty`) || "1") || 1;
   const batteryProductId = watch(`${prefix}.batteryProductId`) ?? "";
-const batteryQty       = parseInt(watch(`${prefix}.batteryQty`) || "0") || 0;
+  const batteryQty       = parseInt(watch(`${prefix}.batteryQty`) || "0") || 0;
+  const oversize          = watch(`${prefix}.oversize`) || false;
+  const hasShading        = watch(`${prefix}.hasShading`) || false;
+  const shadingReduction  = parseFloat(watch(`${prefix}.shadingReduction`) || "0") || 0;
 
   // We need the product catalog — fetch from form context via a shared data attr
   // Since products aren't in form state, we use a global window cache set by StepComponents
@@ -181,6 +240,12 @@ const batteryQty       = parseInt(watch(`${prefix}.batteryQty`) || "0") || 0;
   const invTotal     = inverterQty * getProductSellPrice(inverterProductId);
 const batTotal     = batteryQty  * getProductSellPrice(batteryProductId ?? 0);
   const autoSysPrice = panelTotal + invTotal + batTotal;
+  
+  // ── System size for generation calculation ────────────────────────────────
+  const cache = (window as any).__productCache || {};
+  const panel = cache[panelProductId];
+  const panelWatts = panel?.max_panel_output_power || panel?.max_panel_output || 0;
+  const systemSizeKw = (panelWatts * panelQty) / 1000;
 
   // Editable system price — defaults to auto-calculated
   const sysPriceRaw  = watch(`${prefix}.sysPrice`);
@@ -194,8 +259,53 @@ const batTotal     = batteryQty  * getProductSellPrice(batteryProductId ?? 0);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoSysPrice]);
 
+  // ── Auto-calculate expected generations ──────────────────────────────────
+  useEffect(() => {
+    const cache = (window as any).__productCache || {};
+    const panel = cache[panelProductId];
+    const panelWatts = panel?.max_panel_output_power || panel?.max_panel_output || 0;
+    const systemSizeKw = (panelWatts * panelQty) / 1000;
+
+    if (systemSizeKw > 0) {
+      const multiplier = oversize ? 150 : 110;
+      let gen = systemSizeKw * multiplier;
+      if (hasShading) {
+        gen -= shadingReduction;
+      }
+      setValue(`${prefix}.expectedGen`, Math.round(gen).toString());
+    }
+  }, [panelProductId, panelQty, oversize, hasShading, shadingReduction, setValue, prefix]);
+
+  // ── Auto-fill after sales defaults ──────────────────────────────────────
+  useEffect(() => {
+    const cache = (window as any).__productCache || {};
+    const selectedInv = cache[inverterProductId];
+    const brand = selectedInv?.brand?.toLowerCase();
+
+    let period = "2";
+    let freq = "1";
+
+    if (sysType === "ongrid" || sysType === "hybrid") {
+      period = "2";
+      freq = "1";
+    } else if (sysType === "hybrid-offgrid" || sysType === "offgrid") {
+      period = "1";
+      freq = "1";
+    }
+
+    if (brand === "goodwe") {
+      freq = "1";
+    } else if (brand === "growatt") {
+      freq = "2";
+    }
+
+    setValue(`${prefix}.afterSalesPeriod`, period);
+    setValue(`${prefix}.servicesPerYear`, freq);
+  }, [inverterProductId, sysType, setValue, prefix]);
+
   // ── Totals ────────────────────────────────────────────────────────────────
-  const subtotal    = sysPrice + structPrice + installPrice;
+  const cebCharges  = parseFloat(watch("cebCharges") || "0") || 0;
+  const subtotal    = sysPrice + structPrice + installPrice + cebCharges;
   const discountAmt = (subtotal * discountPct) / 100;
   const finalPrice  = subtotal - discountAmt;
 
@@ -270,6 +380,113 @@ const batTotal     = batteryQty  * getProductSellPrice(batteryProductId ?? 0);
               {installPrice > 0 && (
                 <p className="text-xs text-muted-foreground">{fmtRs(installPrice)}</p>
               )}
+            </div>
+          </div>
+
+          {/* After Sales & Performance */}
+          <div className="rounded-xl border bg-gradient-to-br from-amber-50/50 to-orange-50/50 p-4 dark:from-amber-950/20 dark:to-orange-950/20 mt-4">
+            <div className="mb-4 flex items-center gap-2 border-b pb-3">
+              <Sun className="h-4 w-4 text-amber-500" />
+              <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                Performance & Service
+              </span>
+            </div>
+            
+            <div className="grid gap-4 sm:grid-cols-2">
+              {/* After sales period */}
+              <div className="space-y-1.5">
+                <Label className="text-sm">After sales period</Label>
+                <Select
+                  value={watch(`${prefix}.afterSalesPeriod`) || "2"}
+                  onValueChange={(v) => setValue(`${prefix}.afterSalesPeriod`, v)}
+                >
+                  <SelectTrigger className="h-9 text-sm bg-background">
+                    <SelectValue placeholder="Select years" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="1">1 Year</SelectItem>
+                    <SelectItem value="2">2 Years</SelectItem>
+                    <SelectItem value="3">3 Years</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Services per year */}
+              <div className="space-y-1.5">
+                <Label className="text-sm">Services per year</Label>
+                <Select
+                  value={watch(`${prefix}.servicesPerYear`) || "1"}
+                  onValueChange={(v) => setValue(`${prefix}.servicesPerYear`, v)}
+                >
+                  <SelectTrigger className="h-9 text-sm bg-background">
+                    <SelectValue placeholder="Select frequency" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="1">1 per year</SelectItem>
+                    <SelectItem value="2">2 per year</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2 mt-4">
+              {/* Expected generation */}
+              <div className="space-y-1.5">
+                <Label className="text-sm">Expected generation (Units/month)</Label>
+                <div className="relative">
+                  <Input
+                    {...register(`${prefix}.expectedGen`)}
+                    type="number"
+                    placeholder="0"
+                    className="h-9 pr-12 bg-background"
+                  />
+                  <div className="absolute right-3 top-2 text-xs text-muted-foreground">
+                    Units
+                  </div>
+                </div>
+                {systemSizeKw > 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    Auto-filled: {systemSizeKw.toFixed(1)} kW × {oversize ? "150" : "110"}{" "}
+                    {hasShading && `− ${shadingReduction}`} = {watch(`${prefix}.expectedGen`)} Units
+                  </p>
+                )}
+              </div>
+
+              {/* Shading */}
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <Label className="text-sm">Shading conditions</Label>
+                  <div className="flex items-center gap-2">
+                    <Checkbox
+                      id={`shading-${idx}`}
+                      checked={hasShading}
+                      onCheckedChange={(v) => setValue(`${prefix}.hasShading`, !!v)}
+                    />
+                    <Label htmlFor={`shading-${idx}`} className="text-xs cursor-pointer text-muted-foreground">Apply reduction</Label>
+                  </div>
+                </div>
+                {hasShading ? (
+                  <div className="mt-2 space-y-1.5 rounded-lg border border-amber-200 bg-amber-50 p-3 dark:border-amber-900 dark:bg-amber-950/30">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-xs font-medium text-amber-800 dark:text-amber-300">Reduction amount</Label>
+                      <span className="text-xs text-amber-600 dark:text-amber-400">Units/month</span>
+                    </div>
+                    <Input
+                      {...register(`${prefix}.shadingReduction`)}
+                      type="number"
+                      placeholder="Enter reduction"
+                      className="h-8 text-xs border-amber-300 focus-visible:ring-amber-500 bg-background"
+                    />
+                    <p className="text-[10px] text-amber-600 dark:text-amber-400">
+                      This will be subtracted from the base expected generation.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="flex h-16 items-center justify-center rounded-lg border border-dashed text-xs text-muted-foreground">
+                    No shading applied
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 

@@ -16,7 +16,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Plus, Search, MoreVertical, Pencil, Trash2, Loader2, Zap, Battery, Sun, Power } from "lucide-react";
 
-const fmtRs = (n: number) => n ? "Rs. " + Number(n).toLocaleString("en-US") : "—";
+const fmtRs = (n: number | string) => {
+  const num = Number(n);
+  return num ? "Rs. " + num.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "—";
+};
 
 export default function ProductsPage() {
   const { toast } = useToast();
