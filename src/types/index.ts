@@ -10,7 +10,7 @@ export interface AppUser {
 
 // ─── Products / catalog ──────────────────────────────────────────────────────
 export type ProductType = "panel" | "inverter" | "battery";
-export type SystemType = "ongrid" | "hybrid" | "offgrid";
+export type SystemType = "ongrid" | "hybrid" | "hybrid-offgrid" | "offgrid" | "grid-backup";
 export type Phase = "1" | "3";
 export type InverterType = "ongrid" | "hybrid" | "offgrid";
 
@@ -36,7 +36,8 @@ export interface InverterProduct {
   pv_string_count: number;
   mppt_count: number;
   max_output_current: number;
-  warranty: string;
+  warranty: number;
+  qty: number;
   buy_price: number;
   sell_price: number;
   // Hybrid / offgrid only
@@ -67,7 +68,8 @@ export interface BatteryProduct {
   battery_operating_voltage: string;
   cycle_count: number;
   battery_model_type: string;
-  warranty: string;
+  warranty: number;
+  qty: number;
  buy_price: number;
   sell_price: number;
 }
@@ -89,7 +91,8 @@ export interface PanelProduct {
   width: number;
   height: number;
   length: number;
-  warranty: string;
+  warranty: number;
+  qty: number;
   buy_price: number;
   sell_price: number;
 }
@@ -138,11 +141,13 @@ export interface CustomerInfo {
   phone: string;
   phone2?: string;
   email: string;
+  sendFormat?: string[];
 }
 
   export interface Proposal {
     id: string;
     qtnNo: string;
+    propNo?: string;
     date: string;           // ISO date string
     customer: CustomerInfo;
     sysType: SystemType;
@@ -152,7 +157,7 @@ export interface CustomerInfo {
     cutoutCurrent: string;
     mountType?: string;
     powerScheme: string;
-  numOptions: 1 | 2;
+  numOptions: number;
   options: ProposalOption[];
   pay1: string;
   pay2: string;
@@ -218,14 +223,17 @@ export interface ProposalFormData {
   phone2: string;
   email: string;
   date: string;
+  sendFormat: string[];
   // Step 2 – site
   sysType: SystemType;
   utility: "CEB" | "LECO";
   phase: Phase;
   roofType: string;
-   cutoutCurrent: string;
+  cutoutCurrent: string;
   powerScheme: string;
   mountType: "roof" | "ground";
+  monthlyUsage: string;
+  batteryDays: number;
   numOptions: 1 | 2;
   // Step 3 – options (components)
   options: OptionFormData[];
@@ -234,17 +242,20 @@ export interface ProposalFormData {
   pay2: string;
   pay3: string;
   extraNotes: string;
+  cebCharges?: string;
+  validityPeriod?: string;
 }
 
 export interface OptionFormData {
+  sysType: SystemType;
   panelProductId: string;
   panelQty: string;
   inverterProductId: string;
   inverterQty: string;
   batteryProductId?: string;
   batteryQty?: string;
+  batteryDays?: number;
   coo: string;
-  monthlyUsage: string;
   oversize: boolean;
   estOutput: string;
   sysPrice: string;
@@ -253,6 +264,11 @@ export interface OptionFormData {
   discount: string;
   totalPrice: string;
   specialStructNote: boolean;
+  afterSalesPeriod?: string;
+  servicesPerYear?: string;
+  expectedGen?: string;
+  hasShading?: boolean;
+  shadingReduction?: string;
 }
 // ─── API responses ────────────────────────────────────────────────────────────
 export interface ApiResponse<T> {

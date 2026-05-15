@@ -30,9 +30,17 @@ export async function middleware(req: NextRequest) {
   const isProtected = PROTECTED_PATHS.some((p) => pathname.startsWith(p));
   if (!isProtected) return NextResponse.next();
 
-  // Check session cookie
+  // Check session cookie or Bearer token
   const session = req.cookies.get("__session")?.value;
-  if (!session) {
+  const token = req.headers.get("authorization")?.replace("Bearer ", "");
+
+  if (!session && !token) {
+    if (pathname.startsWith("/api/")) {
+      return new NextResponse(
+        JSON.stringify({ error: "Unauthorized" }),
+        { status: 401, headers: { "Content-Type": "application/json" } }
+      );
+    }
     const loginUrl = new URL("/login", req.url);
     loginUrl.searchParams.set("from", pathname);
     return NextResponse.redirect(loginUrl);

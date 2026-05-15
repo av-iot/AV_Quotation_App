@@ -1,9 +1,11 @@
 "use client";
+import { useEffect } from "react";
 import { useFormContext } from "react-hook-form";
 import type { ProposalFormData } from "@/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
 import { Home } from "lucide-react";
 import { motion } from "framer-motion";
 
@@ -12,8 +14,14 @@ const fadeUp = { initial: { opacity: 0, y: 8 }, animate: { opacity: 1, y: 0, tra
 
 export default function StepSite({ onNext }: { onNext: () => void }) {
   const { register, watch, setValue } = useFormContext<ProposalFormData>();
-  const sysType = watch("sysType");
-  const numOptions = watch("numOptions");
+  const phase = watch("phase") || "1";
+  const cutoutCurrent = watch("cutoutCurrent") || "63";
+
+  useEffect(() => {
+    if (phase === "1" && cutoutCurrent !== "32") {
+      setValue("cutoutCurrent", "32");
+    }
+  }, [phase, cutoutCurrent, setValue]);
 
   return (
     <motion.div variants={stagger} initial="initial" animate="animate" className="space-y-4">
@@ -21,29 +29,17 @@ export default function StepSite({ onNext }: { onNext: () => void }) {
         <CardHeader className="pb-4">
           <CardTitle className="flex items-center gap-2 text-base">
             <Home className="h-4 w-4 text-primary" />
-            Site & system type
+            Site details
           </CardTitle>
         </CardHeader>
         <CardContent>
           <div className="grid gap-4 sm:grid-cols-2">
-            <motion.div variants={fadeUp} className="space-y-1.5">
-              <Label>System type *</Label>
-              <Select value={sysType} onValueChange={(v) => setValue("sysType", v as any)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="ongrid">On-Grid (Grid Tied)</SelectItem>
-                  <SelectItem value="hybrid">Hybrid (Grid Tied + Battery)</SelectItem>
-                  <SelectItem value="offgrid">Off-Grid (Battery)</SelectItem>
-                </SelectContent>
-              </Select>
-            </motion.div>
 
             <motion.div variants={fadeUp} className="space-y-1.5">
   <Label>Utility provider</Label>
   <Select
-    value={sysType === "offgrid" ? "NONE" : (watch("utility") || "CEB")}
+    value={watch("utility") || "CEB"}
     onValueChange={(v) => setValue("utility", v as any)}
-    disabled={sysType === "offgrid"}
   >
     <SelectTrigger>
       <SelectValue />
@@ -54,16 +50,11 @@ export default function StepSite({ onNext }: { onNext: () => void }) {
       <SelectItem value="NONE">None</SelectItem>
     </SelectContent>
   </Select>
-  {sysType === "offgrid" && (
-    <p className="text-xs text-muted-foreground">
-      Off-grid systems have no utility connection.
-    </p>
-  )}
 </motion.div>
 
             <motion.div variants={fadeUp} className="space-y-1.5">
               <Label>Phase supply</Label>
-              <Select value={watch("phase") || "1"} onValueChange={(v) => setValue("phase", v as any)}>
+              <Select value={phase} onValueChange={(v) => setValue("phase", v as any)}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="1">Single Phase</SelectItem>
@@ -73,18 +64,50 @@ export default function StepSite({ onNext }: { onNext: () => void }) {
             </motion.div>
 
             <motion.div variants={fadeUp} className="space-y-1.5">
-  <Label>Cutout current (A)</Label>
- <Select value={watch("cutoutCurrent") || "63"} onValueChange={(v) => setValue("cutoutCurrent", v as any)}>
-    <SelectTrigger><SelectValue /></SelectTrigger>
-    <SelectContent>
-      <SelectItem value="32">32 A</SelectItem>
-      <SelectItem value="63">63 A</SelectItem>
-      <SelectItem value="100">100 A</SelectItem>
-      <SelectItem value="250">250 A</SelectItem>
-      <SelectItem value="400">400 A</SelectItem>
-    </SelectContent>
-  </Select>
-</motion.div>
+              <Label>Cutout current (A)</Label>
+              {phase === "1" ? (
+                <Select value="32" disabled>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="32">32 A (Fixed for Single Phase)</SelectItem>
+                  </SelectContent>
+                </Select>
+              ) : (
+                <div className="space-y-3">
+                  <Select 
+                    value={["32", "63"].includes(cutoutCurrent) ? cutoutCurrent : "bulk"} 
+                    onValueChange={(v) => {
+                      if (v === "bulk") {
+                        setValue("cutoutCurrent", "100"); // default bulk
+                      } else {
+                        setValue("cutoutCurrent", v);
+                      }
+                    }}
+                  >
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="32">32 A</SelectItem>
+                      <SelectItem value="63">63 A</SelectItem>
+                      <SelectItem value="bulk">Bulk</SelectItem>
+                    </SelectContent>
+                  </Select>
+
+                  {!["32", "63"].includes(cutoutCurrent) && (
+                    <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} className="space-y-2">
+                      <Input 
+                        type="number" 
+                        value={cutoutCurrent}
+                        onChange={(e) => setValue("cutoutCurrent", e.target.value)}
+                        placeholder="Enter bulk capacity (e.g. 100)"
+                      />
+                      <p className="text-xs font-medium text-destructive">
+                        * Note: Need a transformer for bulk connections.
+                      </p>
+                    </motion.div>
+                  )}
+                </div>
+              )}
+            </motion.div>
 
             <motion.div variants={fadeUp} className="space-y-3 sm:col-span-2">
   <Label>Mount type & structure</Label>

@@ -30,7 +30,7 @@ const fmtRs = (v?: string | number | null) => {
   if (!v) return "—";
   const n = Number(v);
   if (isNaN(n) || n === 0) return "—";
-  return "Rs. " + n.toLocaleString("en-US", { minimumFractionDigits: 2 });
+  return "Rs. " + n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 };
 
 const fmtDate = (ds: string) => {
@@ -95,7 +95,14 @@ export default function StepReview({ onNext }: { onNext: () => void }) {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <Row label="System type"    value={f.sysType === "ongrid" ? "On-Grid" : f.sysType === "hybrid" ? "Hybrid" : "Off-Grid"} />
+            <Row label="System type"    value={
+              f.sysType === "ongrid" ? "On-Grid (Solar + Grid)" :
+              f.sysType === "hybrid" ? "Hybrid (Solar + Grid + Battery)" :
+              f.sysType === "hybrid-offgrid" ? "Hybrid (Solar + Battery - No Grid)" :
+              f.sysType === "offgrid" ? "Off-Grid (Solar + Battery)" :
+              f.sysType === "grid-backup" ? "Grid Backup (Grid + Battery - No Solar)" :
+              f.sysType
+            } />
             <Row label="Utility"        value={f.utility} />
             <Row label="Phase"          value={f.phase === "1" ? "Single Phase" : "Three Phase"} />
             <Row label="Cutout current" value={f.cutoutCurrent ? f.cutoutCurrent + " A" : undefined} />
@@ -130,8 +137,9 @@ export default function StepReview({ onNext }: { onNext: () => void }) {
         const sysPrice    = parseFloat(opt.sysPrice    || "0") || 0;
         const structPrice = parseFloat(opt.structPrice  || "0") || 0;
         const installPrice= parseFloat((opt as any).installPrice || "0") || 0;
+        const cebCharges  = parseFloat(f.cebCharges || "0") || 0;
         const discount    = parseFloat((opt as any).discount    || "0") || 0;
-        const subtotal    = sysPrice + structPrice + installPrice;
+        const subtotal    = sysPrice + structPrice + installPrice + cebCharges;
         const discAmt     = (subtotal * discount) / 100;
         const finalPrice  = subtotal - discAmt;
 
@@ -160,7 +168,7 @@ export default function StepReview({ onNext }: { onNext: () => void }) {
                 )}
 
                 {/* Panels */}
-                {panel && (
+                {panel && f.sysType !== "grid-backup" && (
                   <div>
                     <SectionTitle>Solar panels</SectionTitle>
                     <Row label="Brand / Model"  value={`${panel.brand} (${panel.model})`} />
@@ -185,12 +193,20 @@ export default function StepReview({ onNext }: { onNext: () => void }) {
                   </div>
                 )}
 
+                {/* Performance & Service */}
+                <div>
+                  <SectionTitle>Performance & Service</SectionTitle>
+                  <Row label="Expected generation" value={(opt as any).expectedGen ? `${(opt as any).expectedGen} Units/month` : "—"} />
+                  <Row label="After sales service" value={(opt as any).afterSalesPeriod ? `${(opt as any).afterSalesPeriod} Years (${(opt as any).servicesPerYear} per year)` : "—"} />
+                </div>
+                
                 {/* Pricing */}
                 <div>
                   <SectionTitle>Pricing</SectionTitle>
                   <Row label="System price"    value={fmtRs(sysPrice)} />
                   {structPrice > 0  && <Row label="Structure price"    value={fmtRs(structPrice)} />}
                   {installPrice > 0 && <Row label="Installation price" value={fmtRs(installPrice)} />}
+                  {cebCharges > 0 && <Row label="CEB chargers" value={fmtRs(cebCharges)} />}
                   {subtotal > 0     && <Row label="Subtotal"           value={fmtRs(subtotal)} />}
                   {discount > 0     && <Row label={`Discount (${discount}%)`} value={`− ${fmtRs(discAmt)}`} />}
                   <div className="mt-2 flex justify-between rounded-lg bg-primary/5 px-3 py-2.5">
@@ -222,6 +238,9 @@ export default function StepReview({ onNext }: { onNext: () => void }) {
             )}
             {f.pay3 && (
               <Row label="After commissioning" value={`${f.pay3}%`} />
+            )}
+            {f.validityPeriod && (
+              <Row label="Validity period" value={`${f.validityPeriod} days`} />
             )}
             {f.extraNotes && (
               <div className="mt-3 rounded-lg border bg-muted/40 px-3 py-2.5">

@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import Image from "next/image";
+import { usePathname, useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   FileText, Receipt, LayoutDashboard, Settings,
@@ -30,22 +31,93 @@ const NAV_ITEMS = [
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [collapsed, setCollapsed] = useState(false);
+  const [showToggle, setShowToggle] = useState(false);
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const autoCollapseRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Auto-collapse after 5 seconds on first load
+  useEffect(() => {
+    autoCollapseRef.current = setTimeout(() => {
+      setCollapsed(true);
+    }, 5000);
+    return () => {
+      if (autoCollapseRef.current) clearTimeout(autoCollapseRef.current);
+    };
+  }, []);
+  
   const pathname = usePathname();
+  const router = useRouter();
   const { theme, setTheme } = useTheme();
-  const { user, signOut } = useAuth();
+  const { user, loading, signOut } = useAuth();
+
+  const handleInteract = () => {
+    setShowToggle(true);
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(() => {
+      setShowToggle(false);
+    }, 5000);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!loading && !user) {
+      router.push("/login");
+    }
+  }, [loading, user, router]);
+
+  if (loading) {
+    return (
+      <div className="flex h-[100dvh] items-center justify-center bg-background">
+        <div className="text-muted-foreground">Loading...</div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return null;
+  }
 
   const sidebarW = collapsed ? 68 : 240;
 
   return (
-    <div className="flex h-screen overflow-hidden bg-background">
+    <div className="flex h-[100dvh] overflow-hidden bg-background">
       {/* ── Sidebar ──────────────────────────────────────────────────── */}
       <motion.aside
         animate={{ width: sidebarW }}
         transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
         className="relative flex flex-col border-r bg-card z-20"
+        onMouseEnter={handleInteract}
+        onMouseMove={handleInteract}
       >
+        {/* Floating Toggle Button */}
+        <AnimatePresence>
+          {showToggle && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              transition={{ duration: 0.15 }}
+              className="absolute -right-3.5 top-[18px] z-50 hidden md:flex"
+            >
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-7 w-7 rounded-full bg-background shadow-sm shrink-0"
+                onClick={() => setCollapsed((c) => !c)}
+              >
+                {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+              </Button>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         {/* Logo area */}
-        <div className="flex h-16 items-center justify-between px-4 border-b">
+        <div className={cn("flex h-16 items-center border-b", collapsed ? "justify-center px-2" : "px-4")}>
           <AnimatePresence initial={false}>
             {!collapsed && (
               <motion.div
@@ -53,31 +125,31 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -8 }}
                 transition={{ duration: 0.18 }}
-                className="flex items-center gap-2.5 overflow-hidden"
+                className="flex items-center overflow-hidden"
               >
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary">
-                  <Sun className="h-4 w-4 text-primary-foreground" strokeWidth={2} />
-                </div>
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-bold leading-tight text-foreground">Alta Vision</p>
-                  <p className="truncate text-[10px] text-muted-foreground">Solar PV System</p>
-                </div>
+                <Image
+                  src="/logo.png"
+                  alt="Alta Vision"
+                  width={170}
+                  height={27}
+                  className="object-contain"
+                  priority
+                />
               </motion.div>
             )}
           </AnimatePresence>
           {collapsed && (
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
-              <Sun className="h-4 w-4 text-primary-foreground" strokeWidth={2} />
+            <div className="flex w-full items-center justify-center">
+              <Image
+                src="/icon.png"
+                alt="Alta Vision"
+                width={36}
+                height={36}
+                className="object-contain"
+                priority
+              />
             </div>
           )}
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-7 w-7 shrink-0"
-            onClick={() => setCollapsed((c) => !c)}
-          >
-            {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
-          </Button>
         </div>
 
         {/* Nav items */}
@@ -89,7 +161,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               <Link
                 key={href}
                 href={href}
-                className={cn("sidebar-link", isActive && "active")}
+                className={cn("sidebar-link", isActive && "active", collapsed ? "justify-center px-0" : "px-3")}
                 title={collapsed ? label : undefined}
               >
                 <Icon className="h-4.5 w-4.5 shrink-0" strokeWidth={1.8} />
@@ -122,12 +194,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <DropdownMenuTrigger asChild>
               <button
                 className={cn(
-                  "flex w-full items-center gap-2.5 rounded-lg p-2",
-                  "hover:bg-accent transition-colors duration-150 text-left"
+                  "flex w-full items-center rounded-lg p-2 transition-colors duration-150 hover:bg-accent",
+                  collapsed ? "justify-center" : "gap-2.5 text-left"
                 )}
               >
                 <Avatar className="h-7 w-7 shrink-0">
-                  <AvatarImage src={user?.photoURL || undefined} />
+                  <AvatarImage src={user?.photoURL || undefined} referrerPolicy="no-referrer" />
                   <AvatarFallback className="bg-primary/10 text-primary text-xs font-semibold">
                     {user?.displayName?.charAt(0) || user?.email?.charAt(0) || "?"}
                   </AvatarFallback>

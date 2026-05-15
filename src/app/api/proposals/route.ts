@@ -26,6 +26,7 @@ export async function GET(req: NextRequest) {
 
 // ─── POST /api/proposals ──────────────────────────────────────────────────────
 export async function POST(req: NextRequest) {
+  console.log("POST /api/proposals called");
   const token = req.headers.get("authorization")?.replace("Bearer ", "");
   if (!token) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
@@ -33,11 +34,39 @@ export async function POST(req: NextRequest) {
   if (!decoded) return NextResponse.json({ error: "Invalid token" }, { status: 401 });
 
   const body: ProposalFormData & { status: string } = await req.json();
+  console.log("POST body:", JSON.stringify(body, null, 2));
+  const db = adminDb();
+
+  // Fetch all active products to look up details
+  const prodSnap = await db.collection("products").where("active", "==", true).get();
+  const productsMap = new Map<string, any>();
+  prodSnap.docs.forEach((d) => productsMap.set(d.id, d.data()));
+
+  // Generate sequential numbers starting from 50000
+  const counterRef = db.collection("system").doc("counters");
+  const { qtnNo, propNo } = await db.runTransaction(async (t) => {
+    const docSnap = await t.get(counterRef);
+    let seq = 50000;
+    if (docSnap.exists && docSnap.data()?.proposalSeq) {
+      seq = docSnap.data()?.proposalSeq;
+    }
+    seq += 1;
+    t.set(counterRef, { proposalSeq: seq }, { merge: true });
+    
+    const paddedSeq = String(seq).padStart(6, '0');
+    return {
+      qtnNo: `QTN_${paddedSeq}`,
+      propNo: `Prop_${paddedSeq}`
+    };
+  });
 
   // Build structured proposal from form data
-  const proposal = buildProposalFromForm(body, decoded.uid);
+  const proposal = buildProposalFromForm(body, decoded.uid, productsMap);
+  
+  // Override form-provided qtnNo with our generated sequence
+  proposal.qtnNo = qtnNo;
+  proposal.propNo = propNo;
 
-  const db = adminDb();
   const ref = await db.collection("proposals").add({
     ...proposal,
     createdAt: FieldValue.serverTimestamp(),

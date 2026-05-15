@@ -11,7 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { FileText, Plus, Search, Download, Eye, Loader2 } from "lucide-react";
+import { FileText, Plus, Search, Download, Eye, Loader2, Trash2 } from "lucide-react";
 import type { Proposal, ProposalStatus } from "@/types";
 
 const STATUS: Record<ProposalStatus, { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
@@ -90,7 +90,7 @@ export default function ProposalsPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="text-xs">Ref. No.</TableHead>
+                  <TableHead className="text-xs">Proposal No.</TableHead>
                   <TableHead className="text-xs">Customer</TableHead>
                   <TableHead className="text-xs">Date</TableHead>
                   <TableHead className="text-xs">Type</TableHead>
@@ -109,10 +109,16 @@ export default function ProposalsPage() {
                       transition={{ delay: i * 0.03 }}
                       className="border-b last:border-0 hover:bg-muted/40 transition-colors"
                     >
-                      <TableCell className="py-3 text-sm font-mono font-medium">{p.qtnNo}</TableCell>
+                      <TableCell className="py-3 text-sm font-mono font-medium text-primary">
+                        {p.propNo || p.qtnNo}
+                      </TableCell>
                       <TableCell className="py-3 text-sm">{p.customer?.name}</TableCell>
                       <TableCell className="py-3 text-sm text-muted-foreground">{p.date}</TableCell>
-                      <TableCell className="py-3 text-xs uppercase text-muted-foreground">{p.sysType}</TableCell>
+                      <TableCell className="py-3 text-xs uppercase text-muted-foreground">
+                        {p.options && p.options.length > 0
+                          ? Array.from(new Set(p.options.map((o: any) => o.sysType).filter(Boolean))).join(", ")
+                          : p.sysType}
+                      </TableCell>
                       <TableCell className="py-3 text-sm text-center">{p.numOptions}</TableCell>
                       <TableCell className="py-3">
                         <Badge variant={STATUS[p.status]?.variant || "outline"} className="text-xs">
@@ -120,15 +126,33 @@ export default function ProposalsPage() {
                         </Badge>
                       </TableCell>
                       <TableCell className="py-3">
-                        <div className="flex gap-1">
-                          <Button variant="ghost" size="icon" className="h-7 w-7" asChild>
+                        <div className="flex gap-1 justify-end">
+                          <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-primary" title="View details" asChild>
                             <Link href={`/proposals/${p.id}`}><Eye className="h-3.5 w-3.5" /></Link>
                           </Button>
+                          <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-blue-500" title="View PDF" asChild>
+                            <Link href={`/print/${p.id}`}><FileText className="h-3.5 w-3.5" /></Link>
+                          </Button>
                           {p.docxUrl && (
-                            <Button variant="ghost" size="icon" className="h-7 w-7" asChild>
+                            <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-green-500" title="Download Word" asChild>
                               <a href={p.docxUrl} target="_blank" rel="noreferrer"><Download className="h-3.5 w-3.5" /></a>
                             </Button>
                           )}
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                            title="Delete"
+                            onClick={async () => {
+                              if (window.confirm("Are you sure you want to delete this proposal?")) {
+                                import("firebase/firestore").then(({ deleteDoc, doc }) => {
+                                  deleteDoc(doc(db, "proposals", p.id)).catch(console.error);
+                                });
+                              }
+                            }}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
                         </div>
                       </TableCell>
                     </motion.tr>

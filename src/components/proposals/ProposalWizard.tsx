@@ -28,6 +28,8 @@ const STEPS = [
 ];
 
 const defaultOption = {
+  sysType: "ongrid" as const,
+  batteryDays: 1,
   panelProductId: "",
   panelQty: "",
   inverterProductId: "",
@@ -35,7 +37,6 @@ const defaultOption = {
   batteryProductId: "",
   batteryQty: "",
   coo: "China",
-  monthlyUsage: "",
   oversize: false,
   estOutput: "",
   sysPrice: "",
@@ -53,6 +54,7 @@ const defaultValues: ProposalFormData = {
   phone: "",
   phone2: "",
   email: "",
+  sendFormat: ["email"],
   date: new Date().toISOString().split("T")[0],
   sysType: "ongrid",
   utility: "CEB",
@@ -62,6 +64,8 @@ const defaultValues: ProposalFormData = {
   roofType: "tile",
   powerScheme: "Net Accounting",
   numOptions: 1,
+  monthlyUsage: "",
+  batteryDays: 1,
   options: [{ ...defaultOption }, { ...defaultOption }],
   pay1: "50",
   pay2: "40",
