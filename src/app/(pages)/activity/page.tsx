@@ -33,7 +33,7 @@ export default function ActivityLogsPage() {
   const [userFilter, setUserFilter] = useState("ALL");
 
   useEffect(() => {
-    const q = query(collection(db, "activity_logs"), orderBy("timestamp", "desc"), limit(200));
+    const q = query(collection(db, "audit_logs"), orderBy("timestamp", "desc"), limit(200));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }) as ActivityLog);
       setLogs(data);
