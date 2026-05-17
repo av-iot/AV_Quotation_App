@@ -72,7 +72,7 @@ export default function ActivityLogsPage() {
     if (!timestamp) return null;
     if (timestamp instanceof Timestamp) return timestamp.toDate();
     const parsed = new Date(timestamp);
-    return Number.isNaN(parsed.getTime()) ? null : parsed;
+    return isNaN(parsed.getTime()) ? null : parsed;
   };
 
   return (
