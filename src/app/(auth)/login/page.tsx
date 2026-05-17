@@ -10,7 +10,7 @@ import { Loader2, Sun, Zap } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 function LoginContent() {
-  const { user, loading, signInWithGoogle, signInWithMyIot } = useAuth();
+  const { user, loading, signInWithGoogle, signInWithMyIot, signInDev } = useAuth();
   const searchParams = useSearchParams();
   const { toast } = useToast();
   const [signingIn, setSigningIn] = useState(false);
@@ -137,6 +137,38 @@ function LoginContent() {
                 </div>
               </div>
             </div>
+
+            {process.env.NODE_ENV === "development" && (
+              <>
+                <div className="relative">
+                  <div className="absolute inset-0 flex items-center">
+                    <div className="w-full border-t" />
+                  </div>
+                  <div className="relative flex justify-center text-xs uppercase">
+                    <span className="bg-card px-2 text-muted-foreground">Dev</span>
+                  </div>
+                </div>
+                <Button
+                  className="w-full gap-3 text-sm border-dashed border-yellow-500/50 text-yellow-600 hover:bg-yellow-500/10"
+                  variant="outline"
+                  size="lg"
+                  onClick={async () => {
+                    setSigningIn(true);
+                    try {
+                      await signInDev();
+                      const from = searchParams.get("from") || "/";
+                      window.location.href = from;
+                    } catch (err: any) {
+                      toast({ title: "Dev login failed", description: err.message, variant: "destructive" });
+                      setSigningIn(false);
+                    }
+                  }}
+                  disabled={signingIn}
+                >
+                  🔧 Dev Login (skip auth)
+                </Button>
+              </>
+            )}
 
             <p className="text-center text-xs text-muted-foreground">
               Access is restricted to authorized company accounts.

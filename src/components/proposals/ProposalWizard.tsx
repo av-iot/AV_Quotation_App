@@ -114,26 +114,81 @@ export default function ProposalWizard() {
   }, [step]);
 
   const handleSave = async (status: "draft" | "sent") => {
-    if (!firebaseUser) return;
+    if (!firebaseUser && !user) return;
     setSaving(true);
     try {
-      const idToken = await firebaseUser.getIdToken();
       const values = methods.getValues();
-      const res = await fetch("/api/proposals", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${idToken}`,
-        },
-        body: JSON.stringify({ ...values, status }),
-      });
-      const { data, error } = await res.json();
-      if (error) throw new Error(error);
-      toast({
-        title: status === "draft" ? "Saved as draft" : "Proposal sent",
-        description: `Reference: ${data.qtnNo}`,
-      });
-      router.push(`/proposals/${data.id}`);
+
+      // Try server API first
+      let serverSuccess = false;
+      try {
+        const idToken = firebaseUser ? await firebaseUser.getIdToken() : null;
+        const res = await fetch("/api/proposals", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...(idToken ? { Authorization: `Bearer ${idToken}` } : {}),
+          },
+          body: JSON.stringify({ ...values, status }),
+        });
+        if (res.ok) {
+          const { data, error } = await res.json();
+          if (!error) {
+            serverSuccess = true;
+            toast({
+              title: status === "draft" ? "Saved as draft" : "Proposal sent",
+              description: `Reference: ${data.qtnNo}`,
+            });
+            router.push(`/proposals/${data.id}`);
+            return;
+          }
+        }
+      } catch {
+        // Server unreachable — fall through to offline save
+      }
+
+      // Offline fallback: write to client-side Firestore (auto-cached by persistence)
+      if (!serverSuccess) {
+        const { collection, addDoc, Timestamp } = await import("firebase/firestore");
+        const { db } = await import("@/lib/firebase");
+        const { buildProposalFromForm } = await import("@/lib/proposal-builder");
+        const { enqueue } = await import("@/lib/offline-queue");
+
+        const tempQtnNo = `PROP_LOCAL_${Date.now().toString().slice(-6)}`;
+        const proposal = buildProposalFromForm(
+          values,
+          user?.uid || "dev_user",
+          new Map() // No products map offline — uses form data directly
+        );
+        proposal.qtnNo = tempQtnNo;
+        proposal.status = status as any;
+
+        const docRef = await addDoc(collection(db, "proposals"), {
+          ...proposal,
+          createdAt: Timestamp.now(),
+          updatedAt: Timestamp.now(),
+          _pendingSync: true, // Flag for sync indicator
+        });
+
+        // Log client-side offline proposal creation
+        const { logActivityClient } = await import("@/lib/audit-logger-client");
+        await logActivityClient(user, "PROPOSAL_CREATE_OFFLINE", {
+          proposalId: docRef.id,
+          qtnNo: tempQtnNo,
+          customerName: proposal.customer.name,
+          sysType: proposal.sysType,
+          status: status,
+        });
+
+        // Queue for server sync when back online
+        await enqueue("create_proposal", { ...values, status }, docRef.id);
+
+        toast({
+          title: "Saved offline",
+          description: `Ref: ${tempQtnNo} — will sync when online`,
+        });
+        router.push(`/proposals/${docRef.id}`);
+      }
     } catch (err: any) {
       toast({
         title: "Save failed",

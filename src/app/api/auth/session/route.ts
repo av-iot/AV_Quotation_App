@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminAuth } from "@/lib/firebase-admin";
 import { cookies } from "next/headers";
+import { logActivityServer } from "@/lib/audit-logger-server";
 
 // POST — set session cookie after successful Firebase login
 export async function POST(req: NextRequest) {
@@ -23,8 +24,21 @@ export async function POST(req: NextRequest) {
       path: "/",
     });
 
+    // Log login activity
+    await logActivityServer(
+      decoded.uid,
+      decoded.email || "",
+      (decoded.name || decoded.displayName || "") as string,
+      "LOGIN",
+      {
+        authProvider: decoded.firebase?.sign_in_provider || "google",
+      },
+      req
+    );
+
     return NextResponse.json({ ok: true });
   } catch (err: any) {
+    console.error("Session creation error:", err.message);
     return NextResponse.json({ error: err.message }, { status: 401 });
   }
 }

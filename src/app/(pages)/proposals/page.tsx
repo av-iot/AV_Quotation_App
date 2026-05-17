@@ -11,19 +11,20 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { FileText, Plus, Search, Download, Eye, Loader2, Trash2 } from "lucide-react";
+import { FileText, Plus, Search, Download, Eye, Loader2, Trash2, ArrowRight } from "lucide-react";
 import type { Proposal, ProposalStatus } from "@/types";
 
 const STATUS: Record<ProposalStatus, { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
   draft: { label: "Draft", variant: "secondary" },
   sent: { label: "Sent", variant: "default" },
   confirmed: { label: "Confirmed", variant: "default" },
+  partial: { label: "Partial", variant: "outline" },
   converted: { label: "Converted", variant: "default" },
   expired: { label: "Expired", variant: "destructive" },
 };
 
 export default function ProposalsPage() {
-  const { firebaseUser } = useAuth();
+  const { firebaseUser, user } = useAuth();
   const [proposals, setProposals] = useState<Proposal[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -110,7 +111,7 @@ export default function ProposalsPage() {
                       className="border-b last:border-0 hover:bg-muted/40 transition-colors"
                     >
                       <TableCell className="py-3 text-sm font-mono font-medium text-primary">
-                        {p.propNo || p.qtnNo}
+                        {p.propNo || p.qtnNo || "No Reference"}
                       </TableCell>
                       <TableCell className="py-3 text-sm">{p.customer?.name}</TableCell>
                       <TableCell className="py-3 text-sm text-muted-foreground">{p.date}</TableCell>
@@ -127,11 +128,11 @@ export default function ProposalsPage() {
                       </TableCell>
                       <TableCell className="py-3">
                         <div className="flex gap-1 justify-end">
-                          <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-primary" title="View details" asChild>
-                            <Link href={`/proposals/${p.id}`}><Eye className="h-3.5 w-3.5" /></Link>
-                          </Button>
                           <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-blue-500" title="View PDF" asChild>
-                            <Link href={`/print/${p.id}`}><FileText className="h-3.5 w-3.5" /></Link>
+                            <Link href={`/print/${p.id}`}><Eye className="h-3.5 w-3.5" /></Link>
+                          </Button>
+                          <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-primary" title="Next Step / Details" asChild>
+                            <Link href={`/proposals/${p.id}`}><ArrowRight className="h-3.5 w-3.5" /></Link>
                           </Button>
                           {p.docxUrl && (
                             <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-green-500" title="Download Word" asChild>
@@ -144,10 +145,20 @@ export default function ProposalsPage() {
                             className="h-7 w-7 text-muted-foreground hover:text-destructive"
                             title="Delete"
                             onClick={async () => {
-                              if (window.confirm("Are you sure you want to delete this proposal?")) {
-                                import("firebase/firestore").then(({ deleteDoc, doc }) => {
-                                  deleteDoc(doc(db, "proposals", p.id)).catch(console.error);
-                                });
+                              if (window.confirm("Are you really sure ?")) {
+                                try {
+                                  const { deleteDoc, doc } = await import("firebase/firestore");
+                                  await deleteDoc(doc(db, "proposals", p.id));
+
+                                  const { logActivityClient } = await import("@/lib/audit-logger-client");
+                                  await logActivityClient(user, "PROPOSAL_DELETE", {
+                                    proposalId: p.id,
+                                    qtnNo: p.qtnNo,
+                                    customerName: p.customer?.name || "",
+                                  });
+                                } catch (error) {
+                                  console.error("Failed to delete proposal:", error);
+                                }
                               }
                             }}
                           >
