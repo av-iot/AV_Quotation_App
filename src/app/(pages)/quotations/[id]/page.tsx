@@ -1,8 +1,9 @@
 "use client";
+import Image from "next/image";
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { doc, getDoc, updateDoc, serverTimestamp } from "firebase/firestore";
+import { doc, getDoc, updateDoc, addDoc, collection, getDocs, query, where, serverTimestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useAuth } from "@/lib/auth-context";
 import { useToast } from "@/hooks/use-toast";
@@ -11,6 +12,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   ArrowLeft, Printer, Edit2, Save, X, Loader2, CheckCircle2,
   Receipt, Landmark, ShieldCheck, CalendarRange, Scale
@@ -32,6 +34,26 @@ const formatCurrency = (amount: number) => {
   return amount.toLocaleString("en-US", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
+  });
+};
+
+const renderDescription = (desc: string | undefined | null) => {
+  if (!desc) return null;
+  const delimiters = [
+    "Supply and installation of ",
+    " hybrid inverter",
+    " batteries",
+    " with ",
+    " Solar panels",
+    ", ",
+    "nos of ",
+    "nos "
+  ];
+  const parts = desc.split(/(Supply and installation of | hybrid inverter| batteries| with | Solar panels|, |nos of |nos )/g);
+  return parts.map((part, index) => {
+    if (delimiters.includes(part)) return part;
+    if (part.trim().length > 0) return <strong key={index} className="font-bold text-black">{part}</strong>;
+    return part;
   });
 };
 
@@ -113,6 +135,17 @@ export default function QuotationDetailPage() {
     }
     loadQuotation();
   }, [id, toast]);
+
+  // Set document title for PDF print filename
+  useEffect(() => {
+    if (qtn) {
+      const qtnBase = qtn.qtnNo || "Quotation";
+      const installmentSuffix = qtn.installmentNo ? `_Part_${qtn.installmentNo}` : "";
+      const rawDate = qtn.confirmedAt || qtn.date || qtn.createdAt;
+      const dateStr = rawDate ? new Date(rawDate).toLocaleDateString("en-GB").replace(/\//g, "-") : "";
+      document.title = `${qtnBase}${installmentSuffix}_${dateStr}`;
+    }
+  }, [qtn]);
 
   const handleUpdateStatus = async (newStatus: QuotationStatus) => {
     if (!qtn || !user) return;
@@ -262,7 +295,41 @@ export default function QuotationDetailPage() {
                 <Edit2 className="h-4 w-4" />
                 Edit Quotation
               </Button>
-              <Button className="gap-2 bg-primary hover:bg-primary/95 text-white" onClick={() => window.print()}>
+              <Button
+                className="gap-2 bg-primary hover:bg-primary/95 text-white"
+                onClick={async () => {
+                  // Count existing print logs for this quotation to determine version
+                  try {
+                    const printSnap = await getDocs(
+                      query(collection(db, "pdf_prints"), where("quotationId", "==", id))
+                    );
+                    const version = printSnap.size + 1;
+
+                    // Write versioned print record
+                    await addDoc(collection(db, "pdf_prints"), {
+                      quotationId: id,
+                      qtnNo: qtn.qtnNo,
+                      version,
+                      printedBy: user?.uid || "dev_user",
+                      printedByEmail: user?.email || "dev@altavision.lk",
+                      printedByName: user?.displayName || "Dev User",
+                      timestamp: serverTimestamp(),
+                    });
+
+                    // Audit log
+                    const { logActivityClient } = await import("@/lib/audit-logger-client");
+                    await logActivityClient(user, "PDF_PRINT", {
+                      quotationId: id,
+                      qtnNo: qtn.qtnNo,
+                      customerName: qtn.customer?.name,
+                      version,
+                    });
+                  } catch (e) {
+                    console.error("PDF print log failed:", e);
+                  }
+                  window.print();
+                }}
+              >
                 <Printer className="h-4 w-4" />
                 Print / Save PDF
               </Button>
@@ -272,51 +339,61 @@ export default function QuotationDetailPage() {
       </div>
 
       {/* ── Status Controller & Summary Panel (hidden on print) ── */}
-      <Card className="print:hidden mb-8 border border-accent bg-accent/5 backdrop-blur-md shadow-sm">
-        <CardContent className="py-4 px-6 flex flex-wrap items-center justify-between gap-6">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10">
-              <Receipt className="h-5 w-5 text-primary" />
-            </div>
-            <div>
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Status Workflow</p>
-              <div className="flex items-center gap-2 mt-0.5">
-                <Badge variant={STATUS_CONFIG[qtn.paymentStatus as QuotationStatus]?.badge || "outline"} className="capitalize">
-                  {STATUS_CONFIG[qtn.paymentStatus as QuotationStatus]?.label || qtn.paymentStatus}
-                </Badge>
+      <Card className="print:hidden mb-8 border-border bg-card shadow-sm overflow-hidden">
+        <CardContent className="p-0">
+          <div className="flex flex-wrap items-center justify-between gap-6 p-5">
+            <div className="flex items-center gap-4">
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 border border-primary/20 shadow-sm">
+                <Receipt className="h-6 w-6 text-primary" />
+              </div>
+              <div>
+                <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-1">Status Workflow</p>
+                <p className="text-xs font-medium text-foreground">Manage quotation lifecycle</p>
               </div>
             </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-medium text-muted-foreground mr-1">Update Status:</span>
-            {updatingStatus ? (
-              <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-            ) : (
-              <select
-                className="text-xs font-semibold h-8 rounded-md border border-input bg-card px-2.5 py-1 focus:ring-1 focus:ring-primary shadow-sm outline-none cursor-pointer"
-                value={qtn.paymentStatus}
-                onChange={(e) => handleUpdateStatus(e.target.value as QuotationStatus)}
-              >
-                {Object.entries(STATUS_CONFIG).map(([key, value]) => (
-                  <option key={key} value={key} className="font-sans font-medium text-foreground">
-                    {value.label}
-                  </option>
-                ))}
-              </select>
-            )}
+            <div className="flex items-center gap-3 bg-background p-2 rounded-xl border border-border shadow-sm">
+              <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wide ml-2">Current Status:</span>
+              {updatingStatus ? (
+                <div className="flex items-center justify-center w-[180px] h-9">
+                  <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                </div>
+              ) : (
+                <Select
+                  value={qtn.paymentStatus}
+                  onValueChange={(val) => handleUpdateStatus(val as QuotationStatus)}
+                >
+                  <SelectTrigger className="w-[180px] h-9 text-xs font-semibold bg-card border-border hover:bg-muted transition-colors focus:ring-1 focus:ring-primary">
+                    <SelectValue placeholder="Select Status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Object.entries(STATUS_CONFIG).map(([key, value]) => (
+                      <SelectItem key={key} value={key} className="text-xs font-medium cursor-pointer">
+                        {value.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            </div>
           </div>
         </CardContent>
       </Card>
 
       {/* ── High-Fidelity Printable A4 Quotation Card ── */}
       <Card className="bg-white text-black border shadow-lg print:shadow-none print:border-none rounded-xl print:rounded-none overflow-hidden duration-300 font-sans relative">
-        <CardContent className="p-8 sm:p-12 print:p-0 space-y-8 select-text">
+        <CardContent className="p-8 sm:p-12 print:p-0 space-y-8 print:space-y-3 select-text qtn-a4-body">
           
           {/* Header Block */}
           <div className="flex flex-row justify-between items-start border-b border-zinc-200 pb-6">
             <div className="space-y-1">
-              <h1 className="text-3xl font-extrabold tracking-tight text-emerald-800 uppercase print:text-emerald-800">Alta Vision</h1>
-              <p className="text-xs font-bold text-zinc-500 tracking-wider uppercase">Solar PV Energy Systems</p>
+              <Image
+                src="/logo.png"
+                alt="Alta Vision"
+                width={180}
+                height={60}
+                className="object-contain mb-1 print:block"
+                priority
+              />
               <p className="text-[10px] text-zinc-400">Alta Vision (Pvt) Ltd | info@altavision.lk</p>
             </div>
             <div className="text-right space-y-1">
@@ -417,7 +494,7 @@ export default function QuotationDetailPage() {
                     onChange={(e) => setEditDescription(e.target.value)}
                   />
                 ) : (
-                  qtn.description || qtn.items?.map((i: any) => i.description).join(", ")
+                  renderDescription(qtn.description || qtn.items?.map((i: any) => i.description).join(", "))
                 )}
               </div>
               <div className="col-span-3 text-right font-mono font-bold text-zinc-950 self-start pt-1">
@@ -429,22 +506,63 @@ export default function QuotationDetailPage() {
                     onChange={(e) => setEditTotal(e.target.value)}
                   />
                 ) : (
-                  formatCurrency(qtn.total)
+                  formatCurrency(qtn.systemTotal ?? qtn.total)
                 )}
               </div>
             </div>
 
             {/* Total Amount row */}
             <div className="grid grid-cols-12 border-t border-zinc-200 pt-3 text-sm">
-              <div className="col-span-9 text-xs font-bold text-zinc-500 uppercase self-center">Total Amount</div>
+              <div className="col-span-9 text-xs font-bold text-zinc-500 uppercase self-center">
+                {qtn.installmentNo ? `This Invoice Amount (${qtn.installmentPercent}%) - Installment ${qtn.installmentNo}` : "Total Amount"}
+              </div>
               <div className="col-span-3 text-right font-mono font-extrabold text-base text-emerald-800 print:text-emerald-800 border-b-4 double border-double border-emerald-800 pb-1">
                 {isEditing ? (
                   <span>LKR {Number(editTotal).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                 ) : (
-                  <span>LKR {formatCurrency(qtn.total)}</span>
+                  <span>LKR {formatCurrency(qtn.installmentAmount ?? qtn.total)}</span>
                 )}
               </div>
             </div>
+
+            {/* Installment Payment Summary Band */}
+            {qtn.installmentNo && (
+              <div className="mt-4 border border-amber-200/70 bg-amber-50/40 rounded-xl p-4 space-y-3 print:hidden">
+                <p className="text-[10px] font-black text-amber-700 uppercase tracking-widest">
+                  Payment Installment {qtn.installmentNo} of {Math.ceil((qtn.systemTotal ?? 0) / (qtn.installmentAmount ?? 1))}
+                </p>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-y-3 text-xs">
+                  <div>
+                    <span className="text-[9px] font-bold text-zinc-400 uppercase block tracking-wider">System Total</span>
+                    <span className="font-semibold text-zinc-800 font-mono">LKR {formatCurrency(qtn.systemTotal ?? 0)}</span>
+                  </div>
+                  <div>
+                    <span className="text-[9px] font-bold text-zinc-400 uppercase block tracking-wider">This Invoice ({qtn.installmentPercent ?? 0}%)</span>
+                    <span className="font-bold text-emerald-700 font-mono">LKR {formatCurrency(qtn.installmentAmount ?? qtn.total)}</span>
+                  </div>
+                  <div>
+                    <span className="text-[9px] font-bold text-zinc-400 uppercase block tracking-wider">Total Invoiced</span>
+                    <span className="font-semibold text-blue-700 font-mono">LKR {formatCurrency(qtn.totalInvoiced ?? qtn.total)}</span>
+                  </div>
+                  <div>
+                    <span className="text-[9px] font-bold uppercase block tracking-wider" style={{color: (qtn.balanceAfter ?? 0) > 0 ? '#b45309' : '#047857'}}>Balance Remaining</span>
+                    <span className={`font-bold font-mono text-sm ${(qtn.balanceAfter ?? 0) > 0 ? 'text-amber-700' : 'text-emerald-700'}`}>
+                      LKR {formatCurrency(qtn.balanceAfter ?? 0)}
+                    </span>
+                    {(qtn.balanceAfter ?? 0) === 0 && (
+                      <span className="block text-[9px] text-emerald-600 font-bold mt-0.5">✓ Fully Settled</span>
+                    )}
+                  </div>
+                </div>
+                {/* Mini progress bar */}
+                <div className="w-full bg-zinc-200 rounded-full h-1.5">
+                  <div
+                    className="bg-emerald-600 rounded-full h-1.5 transition-all print:bg-emerald-600"
+                    style={{ width: `${Math.min(100, ((qtn.totalInvoiced ?? qtn.total) / (qtn.systemTotal ?? 1)) * 100)}%` }}
+                  />
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Warranties Block */}
@@ -453,7 +571,7 @@ export default function QuotationDetailPage() {
               <ShieldCheck className="h-3.5 w-3.5 text-zinc-500 print:text-zinc-500 shrink-0" />
               Warranty Clauses
             </h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 print:grid-cols-3 gap-6">
               
               {/* Inverter Warranty */}
               <div className="space-y-1">
@@ -504,7 +622,7 @@ export default function QuotationDetailPage() {
           </div>
 
           {/* Terms Block */}
-          <div className="border-t border-zinc-100 pt-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="border-t border-zinc-100 pt-6 grid grid-cols-1 md:grid-cols-2 print:grid-cols-2 gap-6">
             
             {/* Validity Period */}
             <div className="space-y-1">
@@ -549,7 +667,7 @@ export default function QuotationDetailPage() {
               Bank Details for Payments
             </h3>
             {isEditing ? (
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 bg-zinc-50 p-3 rounded-lg border">
+              <div className="grid grid-cols-2 md:grid-cols-4 print:grid-cols-4 gap-3 bg-zinc-50 p-3 rounded-lg border">
                 <div>
                   <label className="text-[9px] font-bold text-zinc-500 uppercase block mb-0.5">Account Name</label>
                   <Input
@@ -584,7 +702,7 @@ export default function QuotationDetailPage() {
                 </div>
               </div>
             ) : (
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-y-2 text-xs border border-zinc-100 bg-zinc-50/50 p-4 rounded-xl">
+              <div className="grid grid-cols-2 md:grid-cols-4 print:grid-cols-4 gap-y-2 text-xs border border-zinc-100 bg-zinc-50/50 p-4 rounded-xl">
                 <div>
                   <span className="text-[9px] font-bold text-zinc-400 uppercase block tracking-wider">Account Name</span>
                   <span className="font-semibold text-zinc-800">{qtn.bankDetails?.accountName || "Alta Vision (Pvt) Ltd"}</span>
@@ -605,15 +723,26 @@ export default function QuotationDetailPage() {
             )}
           </div>
 
-          {/* Signature field at bottom */}
-          <div className="pt-12 flex justify-between items-end">
-            <div className="text-[10px] text-zinc-400 italic">
-              * This is an official digital quotation compiled by Alta Vision.
-            </div>
-            <div className="text-right space-y-1">
-              <div className="w-48 border-b border-zinc-900 mx-auto"></div>
-              <p className="text-xs font-bold text-zinc-800 pt-1 tracking-tight text-center">Authorized Signature</p>
-            </div>
+          {/* Auto-generated notice */}
+          <div className="pt-8 border-t border-zinc-100 text-center space-y-0.5">
+            <p className="text-[10px] text-zinc-400 italic">
+              This is a computer-generated quotation. No signature is required.
+            </p>
+            <p className="text-[10px] text-zinc-400">
+              Ref: <span className="font-mono font-semibold">{qtn.qtnNo}</span>
+              {" "}&#8212;{" "}
+              Alta Vision (Pvt) Ltd &#8212; Generated on{" "}
+              {new Date(qtn.confirmedAt || qtn.date).toLocaleDateString("en-GB", {
+                day: "2-digit",
+                month: "long",
+                year: "numeric",
+              })}{" at "}
+              {new Date(qtn.confirmedAt || qtn.date).toLocaleTimeString("en-GB", {
+                hour: "2-digit",
+                minute: "2-digit",
+                hour12: true,
+              })}
+            </p>
           </div>
 
         </CardContent>

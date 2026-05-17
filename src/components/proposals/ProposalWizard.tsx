@@ -154,7 +154,7 @@ export default function ProposalWizard() {
         const { buildProposalFromForm } = await import("@/lib/proposal-builder");
         const { enqueue } = await import("@/lib/offline-queue");
 
-        const tempQtnNo = `QTN_LOCAL_${Date.now().toString().slice(-6)}`;
+        const tempQtnNo = `PROP_LOCAL_${Date.now().toString().slice(-6)}`;
         const proposal = buildProposalFromForm(
           values,
           user?.uid || "dev_user",

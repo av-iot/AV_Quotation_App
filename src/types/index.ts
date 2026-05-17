@@ -132,7 +132,8 @@ export type ProposalStatus =
   | "draft"
   | "sent"
   | "confirmed"
-  | "converted"
+  | "partial"     // at least one installment quotation created, balance still remaining
+  | "converted"   // all installments generated, balance = 0
   | "expired";
 
 export interface CustomerInfo {
@@ -190,13 +191,14 @@ export interface QuotationItem {
 export interface Quotation {
   id: string;
   proposalId: string;     // ref to Proposal
-  qtnNo: string;
+  qtnNo: string;          // e.g. QTN-2025-001/1
   date: string;
   customer: CustomerInfo;
   items: QuotationItem[];
+  description?: string;
   subtotal: number;
-  total: number;
-  selectedOption: number; // 0 or 1
+  total: number;          // = installmentAmount for installment quotations
+  selectedOption: number;
   paymentStatus: QuotationStatus;
   confirmedAt: string;
   confirmedBy: string;
@@ -206,6 +208,19 @@ export interface Quotation {
     branch: string;
     accountNo: string;
   };
+  // Installment tracking
+  installmentNo?: number;       // 1, 2, 3 …
+  installmentPercent?: number;  // % of systemTotal for this invoice
+  installmentAmount?: number;   // amount billed this invoice
+  systemTotal?: number;         // full proposal option price (reference)
+  totalInvoiced?: number;       // running total including this invoice
+  balanceAfter?: number;        // systemTotal − totalInvoiced
+  // Warranty / terms fields
+  inverterWarranty?: string;
+  batteryWarranty?: string;
+  panelWarranty?: string;
+  validityPeriod?: string;
+  paymentTerm?: string;
   docxUrl?: string;
   pdfUrl?: string;
   notes?: string;

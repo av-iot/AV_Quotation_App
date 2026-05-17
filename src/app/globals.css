@@ -98,17 +98,72 @@
     background: white !important;
     color: black !important;
   }
+
   .print\:hidden {
     display: none !important;
   }
-  /* Remove page headers/footers default margins */
+
+  /* A4 single-page output */
   @page {
-    margin: 15mm 15mm 15mm 15mm;
+    size: A4 portrait;
+    margin: 8mm 10mm;
   }
-  /* Ensure page contents are visible and styled correctly */
+
   main {
     padding: 0 !important;
     margin: 0 !important;
     overflow: visible !important;
   }
+
+  /* ── Compress quotation A4 card to fit one page ── */
+
+  /* Reduce the between-section gaps (overrides space-y-8) */
+  .qtn-a4-body > * + * {
+    margin-top: 10px !important;
+  }
+
+  /* Reduce internal top/bottom padding on each section */
+  .qtn-a4-body [class*="pt-6"],
+  .qtn-a4-body [class*="pb-6"] {
+    padding-top: 8px !important;
+    padding-bottom: 8px !important;
+  }
+
+  .qtn-a4-body [class*="pt-12"],
+  .qtn-a4-body [class*="pt-8"] {
+    padding-top: 10px !important;
+  }
+
+  /* Compress multi-column gaps */
+  .qtn-a4-body [class*="gap-6"] {
+    gap: 10px !important;
+  }
+  .qtn-a4-body [class*="gap-4"] {
+    gap: 8px !important;
+  }
+
+  /* Compress internal spacing lists */
+  .qtn-a4-body [class*="space-y-4"] > * + *,
+  .qtn-a4-body [class*="space-y-3"] > * + * {
+    margin-top: 4px !important;
+  }
+
+  /* Slightly smaller body text to save vertical space */
+  .qtn-a4-body [class*="text-xs"] {
+    font-size: 10px !important;
+    line-height: 1.4 !important;
+  }
+
+  /* Prevent page break inside the card */
+  .qtn-a4-body {
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+
+  /* Keep colours accurate in print */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
 }
+

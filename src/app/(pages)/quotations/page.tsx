@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/input";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
-import { Receipt, Search, Download, Eye, Loader2 } from "lucide-react";
+import { Receipt, Search, Download, Eye, Loader2, Trash2, ArrowRight } from "lucide-react";
 import type { Quotation, QuotationStatus } from "@/types";
 
 const STATUS_CONFIG: Record<QuotationStatus, { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
@@ -29,7 +29,7 @@ const fmtRs = (n: number) =>
   "Rs. " + n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 export default function QuotationsPage() {
-  const { firebaseUser } = useAuth();
+  const { firebaseUser, user } = useAuth();
   const [quotations, setQuotations] = useState<Quotation[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -145,7 +145,9 @@ export default function QuotationsPage() {
                       transition={{ delay: i * 0.03 }}
                       className="border-b last:border-0 hover:bg-muted/40 transition-colors"
                     >
-                      <TableCell className="py-3 text-sm font-mono font-medium">{qtn.qtnNo}</TableCell>
+                      <TableCell className="py-3 text-sm font-mono font-medium text-primary">
+                        {qtn.qtnNo || "No Reference"}
+                      </TableCell>
                       <TableCell className="py-3 text-sm">{qtn.customer.name}</TableCell>
                       <TableCell className="py-3 text-sm text-muted-foreground">{qtn.date}</TableCell>
                       <TableCell className="py-3 text-right text-sm font-medium tabular-nums">
@@ -157,25 +159,52 @@ export default function QuotationsPage() {
                         </Badge>
                       </TableCell>
                       <TableCell className="py-3">
-                        <div className="flex gap-1">
-                          <Button variant="ghost" size="icon" className="h-7 w-7" title="View" asChild>
+                        <div className="flex gap-1 justify-end">
+                          {qtn.proposalId && qtn.balanceAfter !== undefined && qtn.balanceAfter > 0 && (
+                            <Button variant="outline" size="sm" className="h-7 text-xs border-primary/20 text-primary hover:bg-primary/5 mr-1" asChild>
+                              <Link href={`/proposals/${qtn.proposalId}`}>
+                                Next Installment
+                              </Link>
+                            </Button>
+                          )}
+                          <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-blue-500" title="View PDF" asChild>
                             <Link href={`/quotations/${qtn.id}`}>
                               <Eye className="h-3.5 w-3.5" />
                             </Link>
                           </Button>
+                          <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-primary" title="Next Step / Details" asChild>
+                            <Link href={`/quotations/${qtn.id}`}>
+                              <ArrowRight className="h-3.5 w-3.5" />
+                            </Link>
+                          </Button>
                           {qtn.docxUrl && (
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-7 w-7"
-                              title="Download"
-                              asChild
-                            >
+                            <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-green-500" title="Download Word" asChild>
                               <a href={qtn.docxUrl} target="_blank" rel="noreferrer">
                                 <Download className="h-3.5 w-3.5" />
                               </a>
                             </Button>
                           )}
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                            title="Delete"
+                            onClick={async () => {
+                              if (window.confirm("Are you really sure ?")) {
+                                const { logActivityClient } = await import("@/lib/audit-logger-client");
+                                await logActivityClient(user, "QUOTATION_DELETE", {
+                                  quotationId: qtn.id,
+                                  qtnNo: qtn.qtnNo,
+                                  customerName: qtn.customer?.name || "",
+                                });
+                                import("firebase/firestore").then(({ deleteDoc, doc }) => {
+                                  deleteDoc(doc(db, "quotations", qtn.id)).catch(console.error);
+                                });
+                              }
+                            }}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
                         </div>
                       </TableCell>
                     </motion.tr>

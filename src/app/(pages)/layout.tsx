@@ -8,7 +8,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   FileText, Receipt, LayoutDashboard, Settings,
   Sun, ChevronLeft, ChevronRight, Moon, LogOut,
-  User, Bell, Package,
+  User, Bell, Package, Activity
 } from "lucide-react";
 import { useTheme } from "next-themes";
 import { useAuth } from "@/lib/auth-context";
@@ -26,7 +26,7 @@ const NAV_ITEMS = [
   { href: "/proposals", icon: FileText, label: "Proposals", badge: null },
   { href: "/quotations", icon: Receipt, label: "Quotations", badge: null },
   { href: "/products",  icon: Package,          label: "Products" },
-  // { href: "/settings", icon: Settings, label: "Settings" },
+  { href: "/activity", icon: Activity, label: "Activity Logs" },
 ];
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
