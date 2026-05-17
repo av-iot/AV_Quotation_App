@@ -3,6 +3,7 @@ import { verifyIdToken, adminDb } from "@/lib/firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
 import { buildProposalFromForm } from "@/lib/proposal-builder";
 import type { ProposalFormData } from "@/types";
+import { logActivityServer } from "@/lib/audit-logger-server";
 
 // ─── GET /api/proposals ───────────────────────────────────────────────────────
 export async function GET(req: NextRequest) {
@@ -72,6 +73,23 @@ export async function POST(req: NextRequest) {
     createdAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
   });
+
+  // Log proposal creation
+  await logActivityServer(
+    decoded.uid,
+    decoded.email || "",
+    (decoded.name || decoded.displayName || "") as string,
+    "PROPOSAL_CREATE",
+    {
+      proposalId: ref.id,
+      qtnNo: proposal.qtnNo,
+      propNo: proposal.propNo || "",
+      customerName: proposal.customer.name,
+      sysType: proposal.sysType,
+      status: body.status,
+    },
+    req
+  );
 
   // Fire-and-forget: generate docx in background
   if (body.status === "sent") {

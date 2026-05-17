@@ -23,7 +23,7 @@ const STATUS: Record<ProposalStatus, { label: string; variant: "default" | "seco
 };
 
 export default function ProposalsPage() {
-  const { firebaseUser } = useAuth();
+  const { firebaseUser, user } = useAuth();
   const [proposals, setProposals] = useState<Proposal[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -145,6 +145,12 @@ export default function ProposalsPage() {
                             title="Delete"
                             onClick={async () => {
                               if (window.confirm("Are you sure you want to delete this proposal?")) {
+                                const { logActivityClient } = await import("@/lib/audit-logger-client");
+                                await logActivityClient(user, "PROPOSAL_DELETE", {
+                                  proposalId: p.id,
+                                  qtnNo: p.qtnNo,
+                                  customerName: p.customer?.name || "",
+                                });
                                 import("firebase/firestore").then(({ deleteDoc, doc }) => {
                                   deleteDoc(doc(db, "proposals", p.id)).catch(console.error);
                                 });

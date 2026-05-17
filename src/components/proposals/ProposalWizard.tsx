@@ -170,6 +170,16 @@ export default function ProposalWizard() {
           _pendingSync: true, // Flag for sync indicator
         });
 
+        // Log client-side offline proposal creation
+        const { logActivityClient } = await import("@/lib/audit-logger-client");
+        await logActivityClient(user, "PROPOSAL_CREATE_OFFLINE", {
+          proposalId: docRef.id,
+          qtnNo: tempQtnNo,
+          customerName: proposal.customer.name,
+          sysType: proposal.sysType,
+          status: status,
+        });
+
         // Queue for server sync when back online
         await enqueue("create_proposal", { ...values, status }, docRef.id);
 

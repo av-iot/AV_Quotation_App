@@ -7,11 +7,13 @@ import { db } from "@/lib/firebase";
 import { Proposal } from "@/types";
 import { Loader2, Printer } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useAuth } from "@/lib/auth-context";
 
 export default function PrintProposalPage() {
   const { id } = useParams() as { id: string };
   const [proposal, setProposal] = useState<Proposal | null>(null);
   const [loading, setLoading] = useState(true);
+  const { user } = useAuth();
 
   useEffect(() => {
     async function load() {
@@ -51,6 +53,18 @@ export default function PrintProposalPage() {
           });
 
           setProposal(propData);
+          
+          // Log PDF generation
+          import("@/lib/audit-logger-client").then(({ logActivityClient }) => {
+            logActivityClient(user, "PDF_GENERATE", {
+              proposalId: id,
+              qtnNo: propData.qtnNo,
+              propNo: propData.propNo || "",
+              customerName: propData.customer.name,
+              type: "proposal",
+            });
+          });
+
           // Wait a bit for render then print
           setTimeout(() => {
             window.print();
@@ -81,7 +95,18 @@ export default function PrintProposalPage() {
   return (
     <div className="bg-white text-black min-h-screen p-8 max-w-4xl mx-auto font-sans">
       <div className="print:hidden mb-8 flex justify-end">
-        <Button onClick={() => window.print()} className="gap-2">
+        <Button onClick={async () => {
+          const { logActivityClient } = await import("@/lib/audit-logger-client");
+          await logActivityClient(user, "PDF_GENERATE", {
+            proposalId: id,
+            qtnNo: proposal.qtnNo,
+            propNo: proposal.propNo || "",
+            customerName: proposal.customer.name,
+            type: "proposal",
+            manualClick: true,
+          });
+          window.print();
+        }} className="gap-2">
           <Printer className="h-4 w-4" />
           Print / Save as PDF
         </Button>

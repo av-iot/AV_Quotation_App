@@ -2,21 +2,28 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { doc, getDoc } from "firebase/firestore";
+import { doc, getDoc, updateDoc, addDoc, collection, serverTimestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { Proposal } from "@/types";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Download, Loader2, FileText } from "lucide-react";
+import { ArrowLeft, Download, Loader2, FileText, Check, Receipt } from "lucide-react";
 import Link from "next/link";
 import { motion } from "framer-motion";
+import { useAuth } from "@/lib/auth-context";
+import { useToast } from "@/hooks/use-toast";
 
 export default function ProposalDetailPage() {
   const { id } = useParams() as { id: string };
   const router = useRouter();
   const [proposal, setProposal] = useState<Proposal | null>(null);
   const [loading, setLoading] = useState(true);
+  const { user } = useAuth();
+  const { toast } = useToast();
+  const [showConvertModal, setShowConvertModal] = useState(false);
+  const [selectedOptionIdx, setSelectedOptionIdx] = useState(0);
+  const [converting, setConverting] = useState(false);
 
   useEffect(() => {
     async function load() {
@@ -33,6 +40,95 @@ export default function ProposalDetailPage() {
     }
     load();
   }, [id]);
+
+  const handleConvert = async () => {
+    if (!proposal || !user) return;
+    setConverting(true);
+    try {
+      const opt = proposal.options[selectedOptionIdx];
+      
+      const items = [
+        {
+          description: `${opt.panel.qty}x ${opt.panel.brand} ${opt.panel.model} (${opt.panel.ratingLabel}) Solar Panels`,
+          qty: opt.panel.qty,
+          unitPrice: 0,
+          total: 0,
+        },
+        {
+          description: `${opt.inverter.qty}x ${opt.inverter.brand} ${opt.inverter.model} (${opt.inverter.ratingLabel}) Inverter`,
+          qty: opt.inverter.qty,
+          unitPrice: 0,
+          total: 0,
+        }
+      ];
+
+      if (opt.battery) {
+        items.push({
+          description: `${opt.battery.qty}x ${opt.battery.brand} ${opt.battery.model} (${opt.battery.ratingLabel}) Battery Storage`,
+          qty: opt.battery.qty,
+          unitPrice: 0,
+          total: 0,
+        });
+      }
+
+      const quotation = {
+        proposalId: id,
+        qtnNo: proposal.qtnNo,
+        date: new Date().toISOString().split("T")[0],
+        customer: proposal.customer,
+        items,
+        subtotal: opt.pricing.totalPrice,
+        total: opt.pricing.totalPrice,
+        selectedOption: selectedOptionIdx,
+        paymentStatus: "pending_payment",
+        confirmedAt: new Date().toISOString(),
+        confirmedBy: user.uid,
+        bankDetails: {
+          accountName: "Alta Vision (Pvt) Ltd",
+          bank: "Commercial Bank of Ceylon",
+          branch: "Kaduwela",
+          accountNo: "1002938475"
+        },
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      };
+
+      // 1. Create the Quotation document
+      const qtnRef = await addDoc(collection(db, "quotations"), quotation);
+
+      // 2. Update the Proposal status
+      await updateDoc(doc(db, "proposals", id), {
+        status: "converted"
+      });
+
+      // 3. Log the activity
+      const { logActivityClient } = await import("@/lib/audit-logger-client");
+      await logActivityClient(user, "QUOTATION_CREATE", {
+        proposalId: id,
+        qtnNo: proposal.qtnNo,
+        quotationId: qtnRef.id,
+        customerName: proposal.customer.name,
+        optionIndex: selectedOptionIdx,
+        optionLabel: opt.label || `Option ${selectedOptionIdx + 1}`,
+      });
+
+      toast({
+        title: "Converted to Quotation!",
+        description: `Reference: ${proposal.qtnNo} is now confirmed.`,
+      });
+
+      router.push("/quotations");
+    } catch (err: any) {
+      toast({
+        title: "Conversion failed",
+        description: err.message,
+        variant: "destructive",
+      });
+    } finally {
+      setConverting(false);
+      setShowConvertModal(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -83,14 +179,30 @@ export default function ProposalDetailPage() {
             </p>
           </div>
         </div>
-        {proposal.docxUrl && (
-          <Button asChild className="gap-2 bg-primary hover:bg-primary/90">
-            <a href={proposal.docxUrl} target="_blank" rel="noreferrer">
-              <Download className="h-4 w-4" />
-              Download Word Document
-            </a>
-          </Button>
-        )}
+        <div className="flex gap-2">
+          {proposal.status !== "converted" && (
+            <Button onClick={() => setShowConvertModal(true)} className="gap-2 bg-green-600 hover:bg-green-700 text-white">
+              <Check className="h-4 w-4" />
+              Confirm & Convert
+            </Button>
+          )}
+          {proposal.docxUrl && (
+            <Button asChild className="gap-2 bg-primary hover:bg-primary/90" onClick={async () => {
+              const { logActivityClient } = await import("@/lib/audit-logger-client");
+              await logActivityClient(user, "DOCX_DOWNLOAD", {
+                proposalId: id,
+                qtnNo: proposal.qtnNo,
+                propNo: proposal.propNo || "",
+                customerName: proposal.customer.name,
+              });
+            }}>
+              <a href={proposal.docxUrl} target="_blank" rel="noreferrer">
+                <Download className="h-4 w-4" />
+                Download Word Document
+              </a>
+            </Button>
+          )}
+        </div>
       </div>
 
       <div className="grid gap-6 md:grid-cols-2">
@@ -173,6 +285,74 @@ export default function ProposalDetailPage() {
           </Card>
         </motion.div>
       </div>
+
+      {/* Convert to Quotation Modal */}
+      {showConvertModal && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in duration-200">
+          <Card className="max-w-md w-full shadow-2xl border bg-card">
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center gap-2">
+                <Receipt className="h-5 w-5 text-green-600" />
+                Confirm & Convert to Quotation
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                Convert this solar proposal into a confirmed order. Select the system option accepted by the customer.
+              </p>
+
+              {proposal.numOptions > 1 ? (
+                <div className="space-y-3">
+                  <label className="text-xs font-semibold text-muted-foreground uppercase">Select Option</label>
+                  <div className="grid gap-3">
+                    {proposal.options.map((opt, i) => (
+                      <button
+                        key={i}
+                        type="button"
+                        onClick={() => setSelectedOptionIdx(i)}
+                        className={`flex flex-col text-left p-3 rounded-lg border-2 transition-all ${
+                          selectedOptionIdx === i
+                            ? "border-green-600 bg-green-50/20 dark:bg-green-950/20"
+                            : "border-muted hover:border-muted-foreground"
+                        }`}
+                      >
+                        <span className="font-bold text-sm text-primary">{opt.label || `Option ${i + 1}`}</span>
+                        <span className="text-xs text-muted-foreground mt-1">
+                          {opt.panel.qty}x {opt.panel.brand} / {opt.inverter.qty}x {opt.inverter.brand}
+                        </span>
+                        <span className="font-bold text-sm mt-2 text-green-600">
+                          Rs. {opt.pricing.totalPrice.toLocaleString()}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="p-3 bg-muted/40 rounded-lg text-sm space-y-1">
+                  <p className="font-medium text-xs text-muted-foreground">Selected Option</p>
+                  <p className="font-semibold text-primary">{proposal.options[0]?.label || "Option 1"}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {proposal.options[0]?.panel.qty}x {proposal.options[0]?.panel.brand} / {proposal.options[0]?.inverter.qty}x {proposal.options[0]?.inverter.brand}
+                  </p>
+                  <p className="font-bold text-green-600 mt-1">
+                    Rs. {proposal.options[0]?.pricing.totalPrice.toLocaleString()}
+                  </p>
+                </div>
+              )}
+
+              <div className="flex gap-3 justify-end pt-2">
+                <Button variant="outline" onClick={() => setShowConvertModal(false)} disabled={converting}>
+                  Cancel
+                </Button>
+                <Button onClick={handleConvert} disabled={converting} className="bg-green-600 hover:bg-green-700 text-white gap-2">
+                  {converting && <Loader2 className="h-4 w-4 animate-spin" />}
+                  Confirm Order
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
     </div>
   );
 }
