@@ -6,7 +6,11 @@ import {
   signInWithCustomToken,
   signOut as firebaseSignOut,
 } from "firebase/auth";
-import { getFirestore } from "firebase/firestore";
+import {
+  initializeFirestore,
+  persistentLocalCache,
+  persistentMultipleTabManager,
+} from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 
 const firebaseConfig = {
@@ -21,7 +25,22 @@ const firebaseConfig = {
 const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
 
 export const auth = getAuth(app);
-export const db = getFirestore(app);
+
+// Enable offline persistence — data is cached in IndexedDB and syncs when online
+export const db = (() => {
+  try {
+    return initializeFirestore(app, {
+      localCache: persistentLocalCache({
+        tabManager: persistentMultipleTabManager(),
+      }),
+    });
+  } catch {
+    // Firestore already initialized (e.g. HMR), get existing instance
+    const { getFirestore } = require("firebase/firestore");
+    return getFirestore(app);
+  }
+})();
+
 export const storage = getStorage(app);
 
 export const googleProvider = new GoogleAuthProvider();

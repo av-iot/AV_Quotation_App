@@ -25,6 +25,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ ok: true });
   } catch (err: any) {
+    console.error("Session creation error:", err.message);
     return NextResponse.json({ error: err.message }, { status: 401 });
   }
 }

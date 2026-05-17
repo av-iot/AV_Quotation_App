@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import { ThemeProvider } from "next-themes";
 import { AuthProvider } from "@/lib/auth-context";
+import { SyncProvider } from "@/components/providers/SyncProvider";
 import { Toaster } from "@/components/ui/toaster";
 import "./globals.css";
 
@@ -35,7 +36,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={`${inter.variable} font-sans antialiased`}>
+      <body className={`${inter.variable} font-sans antialiased`} suppressHydrationWarning>
         <ThemeProvider
           attribute="class"
           defaultTheme="system"
@@ -43,7 +44,9 @@ export default function RootLayout({
           disableTransitionOnChange={false}
         >
           <AuthProvider>
-            {children}
+            <SyncProvider>
+              {children}
+            </SyncProvider>
             <Toaster />
           </AuthProvider>
         </ThemeProvider>

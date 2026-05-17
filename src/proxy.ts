@@ -19,7 +19,7 @@ const PROTECTED_PATHS = [
   "/api/products",
 ];
 
-export async function middleware(req: NextRequest) {
+export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
   // Allow all public paths through — no auth check
@@ -33,6 +33,11 @@ export async function middleware(req: NextRequest) {
   // Check session cookie or Bearer token
   const session = req.cookies.get("__session")?.value;
   const token = req.headers.get("authorization")?.replace("Bearer ", "");
+
+  // Allow dev session in development
+  if (session === "dev_session_token" && process.env.NODE_ENV === "development") {
+    return NextResponse.next();
+  }
 
   if (!session && !token) {
     if (pathname.startsWith("/api/")) {
