@@ -71,23 +71,43 @@ export default function ProposalDetailPage() {
         });
       }
 
+      // Generate dynamic and intelligent description
+      const panelStr = `${opt.panel.qty}nos ${opt.panel.ratingLabel || ""} ${opt.panel.brand || ""} ${opt.panel.model || ""} Solar panels`.replace(/\s+/g, " ").trim();
+      const inverterStr = `${opt.inverter.qty > 1 ? `${opt.inverter.qty}nos of ` : ""}${opt.inverter.ratingLabel || ""} ${opt.inverter.brand || ""} ${opt.inverter.model || ""} hybrid inverter`.replace(/\s+/g, " ").trim();
+      const batteryStr = opt.battery
+        ? `, ${opt.battery.qty > 1 ? `${opt.battery.qty}nos of ` : "nos of "}${opt.battery.ratingLabel || ""} ${opt.battery.brand || ""} ${opt.battery.model || ""} batteries`
+        : "";
+      const dynamicDescription = `Supply and installation of ${inverterStr}${batteryStr} with ${panelStr}`.replace(/\s+/g, " ").trim();
+
+      // Formulate warranties
+      const inverterWarranty = `• ${opt.inverter.warranty || "5 years"} Warranty`;
+      const batteryWarranty = opt.battery ? `• ${opt.battery.warranty || "5 years"} Warranty` : "";
+      const panelWarrantyVal = opt.panel.warranty || "12 years";
+      const panelWarranty = `• ${panelWarrantyVal} Product Warranty\n• 25 Years Performance Warranty`;
+
       const quotation = {
         proposalId: id,
         qtnNo: proposal.qtnNo,
         date: new Date().toISOString().split("T")[0],
         customer: proposal.customer,
         items,
+        description: dynamicDescription,
         subtotal: opt.pricing.totalPrice,
         total: opt.pricing.totalPrice,
         selectedOption: selectedOptionIdx,
         paymentStatus: "pending_payment",
+        inverterWarranty,
+        batteryWarranty,
+        panelWarranty,
+        validityPeriod: "• Quotation Valid for 1 week.",
+        paymentTerm: "• The job will be confirmed upon receipt of full payment.",
         confirmedAt: new Date().toISOString(),
         confirmedBy: user.uid,
         bankDetails: {
           accountName: "Alta Vision (Pvt) Ltd",
-          bank: "Commercial Bank of Ceylon",
-          branch: "Kaduwela",
-          accountNo: "1002938475"
+          bank: "NTB",
+          branch: "Tangalle",
+          accountNo: "1008 9000 8235"
         },
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),

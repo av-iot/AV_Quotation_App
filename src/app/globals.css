@@ -91,3 +91,24 @@
 .step-dot.done {
   @apply bg-primary/60;
 }
+
+/* ─── Print Styles ────────────────────────────────────────────────── */
+@media print {
+  body {
+    background: white !important;
+    color: black !important;
+  }
+  .print\:hidden {
+    display: none !important;
+  }
+  /* Remove page headers/footers default margins */
+  @page {
+    margin: 15mm 15mm 15mm 15mm;
+  }
+  /* Ensure page contents are visible and styled correctly */
+  main {
+    padding: 0 !important;
+    margin: 0 !important;
+    overflow: visible !important;
+  }
+}

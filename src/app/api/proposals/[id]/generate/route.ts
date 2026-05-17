@@ -349,7 +349,7 @@ export async function POST(
         children: [
           new TextRun({
             text: "This proposal is system-generated and valid for 14 days. Thank you for choosing Alta Vision.",
-            italic: true,
+            italics: true,
             size: 18,
             color: "64748b",
           }),

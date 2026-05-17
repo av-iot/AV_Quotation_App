@@ -12,7 +12,7 @@ export async function POST(req: NextRequest) {
   (await cookies()).set("__session", "dev_session_token", {
     maxAge: expiresIn,
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
+    secure: false, // this route is dev-only; always non-secure
     sameSite: "lax",
     path: "/",
   });

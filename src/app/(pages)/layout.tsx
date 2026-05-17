@@ -85,12 +85,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const sidebarW = collapsed ? 68 : 240;
 
   return (
-    <div className="flex h-[100dvh] overflow-hidden bg-background">
+    <div className="flex h-[100dvh] overflow-hidden bg-background print:h-auto print:overflow-visible print:bg-white">
       {/* ── Sidebar ──────────────────────────────────────────────────── */}
       <motion.aside
         animate={{ width: sidebarW }}
         transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
-        className="relative flex flex-col border-r bg-card z-20"
+        className="relative flex flex-col border-r bg-card z-20 print:hidden"
         onMouseEnter={handleInteract}
         onMouseMove={handleInteract}
       >
@@ -242,9 +242,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       </motion.aside>
 
       {/* ── Main content ─────────────────────────────────────────────── */}
-      <div className="flex flex-1 flex-col overflow-hidden">
+      <div className="flex flex-1 flex-col overflow-hidden print:overflow-visible">
         {/* Top bar */}
-        <header className="flex h-16 items-center justify-between border-b bg-card px-6">
+        <header className="flex h-16 items-center justify-between border-b bg-card px-6 print:hidden">
           <h2 className="text-sm font-semibold text-muted-foreground capitalize">
             {pathname === "/" ? "Dashboard" : pathname.slice(1).split("/").join(" / ")}
           </h2>
@@ -256,7 +256,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </header>
 
         {/* Page content with Framer Motion transitions */}
-        <main className="flex-1 overflow-y-auto">
+        <main className="flex-1 overflow-y-auto print:overflow-visible print:p-0">
           <motion.div
             key={pathname}
             initial={{ opacity: 0, y: 10 }}

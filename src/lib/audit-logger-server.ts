@@ -19,7 +19,7 @@ export async function logActivityServer(
     let ip = "";
     let userAgent = "";
     if (req) {
-      ip = req.headers.get("x-forwarded-for") || req.ip || "";
+      ip = req.headers.get("x-forwarded-for") || req.headers.get("x-real-ip") || "";
       userAgent = req.headers.get("user-agent") || "";
     }
 

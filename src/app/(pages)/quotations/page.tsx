@@ -8,6 +8,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import Link from "next/link";
 import { Input } from "@/components/ui/input";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
@@ -157,8 +158,10 @@ export default function QuotationsPage() {
                       </TableCell>
                       <TableCell className="py-3">
                         <div className="flex gap-1">
-                          <Button variant="ghost" size="icon" className="h-7 w-7" title="View">
-                            <Eye className="h-3.5 w-3.5" />
+                          <Button variant="ghost" size="icon" className="h-7 w-7" title="View" asChild>
+                            <Link href={`/quotations/${qtn.id}`}>
+                              <Eye className="h-3.5 w-3.5" />
+                            </Link>
                           </Button>
                           {qtn.docxUrl && (
                             <Button
