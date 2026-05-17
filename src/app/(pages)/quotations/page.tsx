@@ -191,15 +191,19 @@ export default function QuotationsPage() {
                             title="Delete"
                             onClick={async () => {
                               if (window.confirm("Are you really sure ?")) {
-                                const { logActivityClient } = await import("@/lib/audit-logger-client");
-                                await logActivityClient(user, "QUOTATION_DELETE", {
-                                  quotationId: qtn.id,
-                                  qtnNo: qtn.qtnNo,
-                                  customerName: qtn.customer?.name || "",
-                                });
-                                import("firebase/firestore").then(({ deleteDoc, doc }) => {
-                                  deleteDoc(doc(db, "quotations", qtn.id)).catch(console.error);
-                                });
+                                try {
+                                  const { deleteDoc, doc } = await import("firebase/firestore");
+                                  await deleteDoc(doc(db, "quotations", qtn.id));
+                                  
+                                  const { logActivityClient } = await import("@/lib/audit-logger-client");
+                                  await logActivityClient(user, "QUOTATION_DELETE", {
+                                    quotationId: qtn.id,
+                                    qtnNo: qtn.qtnNo,
+                                    customerName: qtn.customer?.name || "",
+                                  });
+                                } catch (error) {
+                                  console.error("Failed to delete quotation:", error);
+                                }
                               }
                             }}
                           >

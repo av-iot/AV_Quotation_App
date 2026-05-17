@@ -146,15 +146,19 @@ export default function ProposalsPage() {
                             title="Delete"
                             onClick={async () => {
                               if (window.confirm("Are you really sure ?")) {
-                                const { logActivityClient } = await import("@/lib/audit-logger-client");
-                                await logActivityClient(user, "PROPOSAL_DELETE", {
-                                  proposalId: p.id,
-                                  qtnNo: p.qtnNo,
-                                  customerName: p.customer?.name || "",
-                                });
-                                import("firebase/firestore").then(({ deleteDoc, doc }) => {
-                                  deleteDoc(doc(db, "proposals", p.id)).catch(console.error);
-                                });
+                                try {
+                                  const { deleteDoc, doc } = await import("firebase/firestore");
+                                  await deleteDoc(doc(db, "proposals", p.id));
+
+                                  const { logActivityClient } = await import("@/lib/audit-logger-client");
+                                  await logActivityClient(user, "PROPOSAL_DELETE", {
+                                    proposalId: p.id,
+                                    qtnNo: p.qtnNo,
+                                    customerName: p.customer?.name || "",
+                                  });
+                                } catch (error) {
+                                  console.error("Failed to delete proposal:", error);
+                                }
                               }
                             }}
                           >

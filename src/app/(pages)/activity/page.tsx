@@ -16,7 +16,7 @@ import { format } from "date-fns";
 type ActivityLog = {
   id: string;
   action: string;
-  timestamp: string; // ISO string
+  timestamp: any; // Firestore Timestamp or ISO string
   userId: string;
   userName: string;
   userEmail: string;
@@ -140,7 +140,9 @@ export default function ActivityLogsPage() {
                   filteredLogs.map((log) => (
                     <TableRow key={log.id} className="group border-border hover:bg-muted/50 transition-colors">
                       <TableCell className="whitespace-nowrap text-sm text-muted-foreground font-mono">
-                        {format(new Date(log.timestamp), "MMM dd, yyyy HH:mm")}
+                        {log.timestamp 
+                          ? format(log.timestamp.toDate ? log.timestamp.toDate() : new Date(log.timestamp), "MMM dd, yyyy HH:mm")
+                          : "Pending..."}
                       </TableCell>
                       <TableCell>
                         <div className="font-medium text-sm text-foreground">{log.userName}</div>

@@ -82,11 +82,12 @@ export default function ProposalDetailPage() {
     if (!proposal) return null;
     const opt = proposal.options[selectedOptionIdx];
     const systemTotal = opt?.pricing?.totalPrice ?? 0;
-    const totalInvoiced = existingQtns.reduce(
+    const optionQtns = existingQtns.filter((q: any) => q.selectedOption === selectedOptionIdx);
+    const totalInvoiced = optionQtns.reduce(
       (s: number, q: any) => s + (q.installmentAmount ?? q.total ?? 0), 0
     );
     const balanceRemaining = Math.max(0, systemTotal - totalInvoiced);
-    const installmentNo = existingQtns.length + 1;
+    const installmentNo = optionQtns.length + 1;
 
     // Build pay schedule from proposal (pay1/pay2/pay3 + any remaining)
     const paySchedule = [
@@ -96,8 +97,8 @@ export default function ProposalDetailPage() {
     ].filter((p) => p > 0);
 
     const suggestedPct =
-      existingQtns.length < paySchedule.length
-        ? paySchedule[existingQtns.length]
+      optionQtns.length < paySchedule.length
+        ? paySchedule[optionQtns.length]
         : // Beyond the defined schedule → suggest exact remaining %
           Math.round((balanceRemaining / systemTotal) * 10000) / 100;
 

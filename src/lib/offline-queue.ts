@@ -143,8 +143,15 @@ export async function syncPendingWrites(
         if (res.ok) {
           const { data } = await res.json();
           
-          // If we wrote to client Firestore with a temp ID, we could update it
-          // But since Firestore persistence handles this, we just dequeue
+          if (item.localFirestoreId) {
+            try {
+              const { deleteDoc, doc } = await import("firebase/firestore");
+              const { db } = await import("@/lib/firebase");
+              await deleteDoc(doc(db, "proposals", item.localFirestoreId));
+            } catch (err) {
+              console.error("Failed to clean up local duplicate proposal:", err);
+            }
+          }
           await dequeue(item.id);
           synced++;
         } else {
