@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
-import { collection, query, orderBy, limit, onSnapshot, getDocs } from "firebase/firestore";
+import { collection, query, orderBy, limit, onSnapshot, Timestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
@@ -16,7 +16,7 @@ import { format } from "date-fns";
 type ActivityLog = {
   id: string;
   action: string;
-  timestamp: string; // ISO string
+  timestamp: Timestamp | null | string;
   userId: string;
   userName: string;
   userEmail: string;
@@ -66,6 +66,13 @@ export default function ActivityLogsPage() {
     if (action.includes("DELETE")) return "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400";
     if (action.includes("GENERATE") || action.includes("PRINT")) return "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400";
     return "bg-muted text-muted-foreground";
+  };
+
+  const getLogDate = (timestamp: ActivityLog["timestamp"]) => {
+    if (!timestamp) return null;
+    if (timestamp instanceof Timestamp) return timestamp.toDate();
+    const parsed = new Date(timestamp);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
   };
 
   return (
@@ -140,7 +147,10 @@ export default function ActivityLogsPage() {
                   filteredLogs.map((log) => (
                     <TableRow key={log.id} className="group border-border hover:bg-muted/50 transition-colors">
                       <TableCell className="whitespace-nowrap text-sm text-muted-foreground font-mono">
-                        {format(new Date(log.timestamp), "MMM dd, yyyy HH:mm")}
+                        {(() => {
+                          const date = getLogDate(log.timestamp);
+                          return date ? format(date, "MMM dd, yyyy HH:mm") : "Pending...";
+                        })()}
                       </TableCell>
                       <TableCell>
                         <div className="font-medium text-sm text-foreground">{log.userName}</div>
