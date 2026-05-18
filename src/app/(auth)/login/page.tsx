@@ -2,7 +2,7 @@
 
 import { useEffect, useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "@/lib/auth-context";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -15,6 +15,32 @@ function LoginContent() {
   const searchParams = useSearchParams();
   const { toast } = useToast();
   const [signingIn, setSigningIn] = useState(false);
+  const [timeString, setTimeString] = useState<string>("");
+
+  // Live-updating Clock (hydration-safe)
+  useEffect(() => {
+    setTimeString(new Date().toLocaleString());
+    const timer = setInterval(() => {
+      setTimeString(new Date().toLocaleString());
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const slogans = [
+    "Powering Sri Lanka's leading solar system design platform with precise estimation engineering.",
+    "Streamlining automated quotation workflows and high-fidelity generation in seconds.",
+    "Ensuring maximum reliability and data integrity through robust access-controlled layers.",
+    "Transforming renewable energy management with smart calculations and modern interfaces."
+  ];
+
+  const [sloganIndex, setSloganIndex] = useState(0);
+
+  useEffect(() => {
+    const sloganTimer = setInterval(() => {
+      setSloganIndex((prev) => (prev + 1) % slogans.length);
+    }, 10000);
+    return () => clearInterval(sloganTimer);
+  }, []);
 
   // If user is already logged in, redirect to dashboard
   useEffect(() => {
@@ -57,7 +83,7 @@ function LoginContent() {
           <div className="relative">
             {/* Spinning external sun rings */}
             <div className="absolute inset-0 rounded-full border-2 border-primary/20 animate-ping duration-1000" />
-            <div className="relative flex h-20 w-20 items-center justify-center rounded-2xl bg-card border border-border shadow-xl">
+            <div className="relative flex h-20 w-20 items-center justify-center rounded-2xl bg-white border border-border shadow-xl">
               <Image
                 src="/icon.png"
                 alt="Alta Vision"
@@ -86,84 +112,86 @@ function LoginContent() {
   return (
     <div className="flex min-h-screen w-screen bg-background overflow-hidden">
       {/* ── LEFT SHOWCASE PANEL (Enterprise Brand Pitch) ───────────────── */}
-      <div className="hidden lg:flex lg:w-[45%] xl:w-[50%] flex-col justify-between p-12 bg-gradient-to-br from-[#0c2e1b] via-[#104825] to-[#082212] relative overflow-hidden text-white border-r border-primary/20">
-        {/* Tech Grid Pattern */}
-        <div className="absolute inset-0 bg-[linear-gradient(to_right,rgba(52,211,153,0.06)_1px,transparent_1px),linear-gradient(to_bottom,rgba(52,211,153,0.06)_1px,transparent_1px)] bg-[size:4rem_4rem] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_40%,#000_80%,transparent_100%)]" />
-        
-        {/* Solar Ray Radial Glows */}
-        <div className="absolute top-[-10%] right-[-10%] w-[450px] h-[450px] bg-emerald-400/10 rounded-full blur-[100px]" />
-        <div className="absolute bottom-[-10%] left-[-10%] w-[350px] h-[350px] bg-teal-500/10 rounded-full blur-[80px]" />
+      <div className="hidden lg:flex lg:w-[45%] xl:w-[50%] flex-col justify-between p-12 relative overflow-hidden text-white border-r border-primary/20">
+        {/* Solar Panel Farm Background Image */}
+        <div className="absolute inset-0 z-0">
+          <Image
+            src="/login-side.jpg"
+            alt="Alta Vision Solar Panel Farm"
+            fill
+            className="object-cover object-center scale-105"
+            priority
+          />
+          {/* High-End Contrast Vignettes: darkens left for text sharpness, keeping center/right bright */}
+          <div className="absolute inset-0 bg-gradient-to-r from-black/85 via-black/20 to-transparent z-[1]" />
+          <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-transparent to-black/75 z-[1]" />
+          {/* Gentle corporate green hue integration */}
+          <div className="absolute inset-0 bg-emerald-950/10 mix-blend-color z-[1]" />
+        </div>
 
-        {/* Top Header */}
-        <div className="relative z-10 flex items-center justify-between">
-          <div className="flex items-center gap-2 bg-emerald-950/40 border border-emerald-500/20 text-emerald-300 text-xs px-3.5 py-1.5 rounded-full backdrop-blur-md">
-            <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
-            <span className="font-semibold tracking-wide uppercase text-[10px]">Secure Proposal Portal</span>
+        {/* Tech Grid Pattern */}
+        <div className="absolute inset-0 z-[1] bg-[linear-gradient(to_right,rgba(52,211,153,0.06)_1px,transparent_1px),linear-gradient(to_bottom,rgba(52,211,153,0.06)_1px,transparent_1px)] bg-[size:4rem_4rem] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_40%,#000_80%,transparent_100%)] opacity-30" />
+
+        {/* Top Header Navigation (Integrated Logo + Live System Clock) */}
+        <div className="relative z-10 flex items-center justify-between w-full bg-black/35 border border-white/5 px-6 py-4 rounded-2xl backdrop-blur-md shadow-lg">
+          <div className="flex items-center gap-3">
+            <div className="h-9 w-9 rounded-xl bg-white flex items-center justify-center border border-slate-200 shadow-md">
+              <Image
+                src="/icon.png"
+                alt="Alta Vision Solar"
+                width={22}
+                height={22}
+                className="object-contain"
+              />
+            </div>
+            <span className="text-sm font-black tracking-wider text-white uppercase">Alta Vision</span>
+          </div>
+          
+          <div className="flex items-center gap-2 bg-emerald-500/10 text-emerald-400 text-[10px] font-bold px-3.5 py-1.5 rounded-full border border-emerald-500/20 shadow-inner">
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+            <span className="font-mono tracking-wide uppercase tabular-nums">{timeString || "CONNECTING..."}</span>
           </div>
         </div>
 
-        {/* Central Graphic Container */}
-        <div className="relative z-10 my-auto flex flex-col items-center justify-center">
+        {/* Central Typographic Lockup */}
+        <div className="relative z-10 my-auto w-full max-w-md">
           <motion.div
-            initial={{ opacity: 0, y: 15, scale: 0.96 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
-            className="bg-emerald-950/20 border border-emerald-500/15 rounded-3xl p-8 backdrop-blur-xl max-w-md w-full shadow-[0_20px_50px_rgba(0,0,0,0.3)] hover:border-emerald-500/30 transition-colors duration-500"
+            initial={{ opacity: 0, y: 30 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
+            className="flex flex-col gap-6"
           >
-            <div className="flex justify-center mb-6">
-              <div className="p-4 bg-emerald-500/10 rounded-2xl border border-emerald-500/20 shadow-inner flex items-center justify-center">
-                <Image
-                  src="/icon.png"
-                  alt="Alta Vision Solar Icon"
-                  width={64}
-                  height={64}
-                  className="object-contain drop-shadow-[0_0_15px_rgba(52,211,153,0.4)]"
-                  priority
-                />
-              </div>
-            </div>
-            
-            <h2 className="text-3xl font-extrabold tracking-tight bg-gradient-to-r from-white via-emerald-100 to-emerald-200 bg-clip-text text-transparent text-center">
-              Alta Vision Solar
-            </h2>
-            <p className="text-emerald-300/80 text-sm mt-1 text-center font-medium">
-              Proposal & Quotation Engine
-            </p>
-
-            {/* Spec grid for modern hardware look */}
-            <div className="mt-8 pt-6 border-t border-emerald-500/10 grid grid-cols-2 gap-4">
-              <div className="bg-white/5 rounded-xl p-3 border border-white/5">
-                <div className="text-[10px] text-emerald-400 font-bold uppercase tracking-wider">Estimation Core</div>
-                <div className="text-lg font-bold mt-0.5 text-white">v3.5.0</div>
-                <div className="text-[9px] text-emerald-300/60 mt-0.5">Automated workflows</div>
-              </div>
-              <div className="bg-white/5 rounded-xl p-3 border border-white/5">
-                <div className="text-[10px] text-emerald-400 font-bold uppercase tracking-wider">Security Layer</div>
-                <div className="text-lg font-bold mt-0.5 text-white">OAuth 2.0</div>
-                <div className="text-[9px] text-emerald-300/60 mt-0.5">Restricted admin domain</div>
-              </div>
-            </div>
-
-            {/* Micro mock layout representation */}
-            <div className="mt-4 bg-white/5 rounded-xl p-3 border border-white/5 flex items-center gap-3">
-              <div className="flex -space-x-1.5">
-                <div className="h-6 w-6 rounded-full bg-emerald-500 border border-emerald-600 flex items-center justify-center text-[10px] font-bold">A</div>
-                <div className="h-6 w-6 rounded-full bg-teal-500 border border-teal-600 flex items-center justify-center text-[10px] font-bold">V</div>
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="h-1.5 w-24 bg-white/20 rounded-full" />
-                <div className="h-1 w-16 bg-white/10 rounded-full mt-1.5" />
-              </div>
-              <span className="text-[9px] font-mono bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-2 py-0.5 rounded">
-                CONNECTED
+            {/* Glowing Accent Tag */}
+            <div className="self-start">
+              <span className="text-[10px] font-extrabold tracking-[0.25em] uppercase bg-gradient-to-r from-emerald-400 to-teal-300 bg-clip-text text-transparent border-b border-emerald-500/30 pb-1.5">
+                Enterprise Solar Suite
               </span>
             </div>
+
+            {/* Giant Title Stack */}
+            <h1 className="text-4xl sm:text-5xl font-black tracking-tight text-white leading-[1.15] drop-shadow-[0_4px_12px_rgba(0,0,0,0.5)]">
+              Solar Quotation<br />
+              <span className="bg-gradient-to-r from-emerald-400 via-teal-300 to-emerald-200 bg-clip-text text-transparent drop-shadow-none">
+                Generation System.
+              </span>
+            </h1>
           </motion.div>
         </div>
 
-        {/* Slogan Footer */}
-        <div className="relative z-10 text-emerald-300/60 text-xs text-center lg:text-left max-w-sm">
-          Powering Sri Lanka's leading solar system design platform with precise estimation engineering.
+        {/* Animated Sliding Slogan Footer wrapped in protective high-end glass container */}
+        <div className="relative z-10 self-start w-full bg-black/45 border border-white/5 px-6 py-4.5 rounded-2xl backdrop-blur-md max-w-sm shadow-xl min-h-[76px] flex items-center overflow-hidden">
+          <AnimatePresence mode="wait">
+            <motion.p
+              key={sloganIndex}
+              initial={{ opacity: 0, x: -15 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: 15 }}
+              transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+              className="text-emerald-100/90 text-xs font-semibold leading-relaxed tracking-wide"
+            >
+              {slogans[sloganIndex]}
+            </motion.p>
+          </AnimatePresence>
         </div>
       </div>
 
@@ -175,13 +203,15 @@ function LoginContent() {
         {/* Main Brand Header for mobile/tablet */}
         <div className="flex justify-between items-center w-full max-w-md mx-auto lg:mx-0">
           <div className="lg:hidden flex items-center gap-2">
-            <Image
-              src="/icon.png"
-              alt="Alta Vision Solar"
-              width={32}
-              height={32}
-              className="object-contain"
-            />
+            <div className="h-8 w-8 rounded-lg bg-white flex items-center justify-center border border-border shadow-sm">
+              <Image
+                src="/icon.png"
+                alt="Alta Vision Solar"
+                width={20}
+                height={20}
+                className="object-contain"
+              />
+            </div>
             <span className="text-md font-bold tracking-tight text-foreground">Alta Vision Solar</span>
           </div>
           {/* Theme display placeholder */}
@@ -197,7 +227,7 @@ function LoginContent() {
               alt="Alta Vision Solar"
               width={220}
               height={36}
-              className="object-contain dark:brightness-125 dark:contrast-110 transition-all duration-300"
+              className="object-contain dark:brightness-0 dark:invert transition-all duration-300"
               priority
             />
           </div>

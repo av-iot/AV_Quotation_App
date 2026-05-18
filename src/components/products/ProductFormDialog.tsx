@@ -3,7 +3,8 @@
 import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { collection, addDoc, updateDoc, doc } from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import { db, storage } from "@/lib/firebase";
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { useAuth } from "@/lib/auth-context";
 import { useToast } from "@/hooks/use-toast";
 import type { InverterProduct, BatteryProduct, PanelProduct, ProductType, InverterType } from "@/types";
@@ -47,6 +48,12 @@ function Section({ title }: { title: string }) {
   );
 }
 
+const getQtyValue = (val: any) => {
+  if (val === undefined || val === null || val === "") return 1;
+  const num = Number(val);
+  return isNaN(num) ? 1 : num;
+};
+
 function numericFields(type: ProductType, data: any, invType: InverterType) {
   if (type === "inverter") {
     const base = {
@@ -57,8 +64,8 @@ function numericFields(type: ProductType, data: any, invType: InverterType) {
       pv_string_count: Number(data.pv_string_count),
       mppt_count: Number(data.mppt_count),
       warranty: Number(data.warranty),
-      qty: Number(data.qty),
-      buy_price: Number(data.buy_price).toFixed(2),
+      qty: getQtyValue(data.qty),
+      buy_price: data.buy_price ? Number(data.buy_price).toFixed(2) : "0.00",
       sell_price: Number(data.sell_price).toFixed(2),
     };
     if (invType === "hybrid" || invType === "offgrid") {
@@ -80,13 +87,14 @@ function numericFields(type: ProductType, data: any, invType: InverterType) {
       nominal_voltage: Number(data.nominal_voltage),
       cycle_count: Number(data.cycle_count),
       warranty: Number(data.warranty),
-      qty: Number(data.qty),
-      buy_price: Number(data.buy_price).toFixed(2),
+      qty: getQtyValue(data.qty),
+      buy_price: data.buy_price ? Number(data.buy_price).toFixed(2) : "0.00",
       sell_price: Number(data.sell_price).toFixed(2),
     };
   }
   if (type === "panel") {
     return {
+      max_panel_output_power: Number(data.max_panel_output),
       max_panel_output: Number(data.max_panel_output),
       max_efficiency: Number(data.max_efficiency),
       max_power_voltage: Number(data.max_power_voltage),
@@ -94,8 +102,8 @@ function numericFields(type: ProductType, data: any, invType: InverterType) {
       height: Number(data.height),
       length: Number(data.length),
       warranty: Number(data.warranty),
-      qty: Number(data.qty),
-      buy_price: Number(data.buy_price).toFixed(2),
+      qty: getQtyValue(data.qty),
+      buy_price: data.buy_price ? Number(data.buy_price).toFixed(2) : "0.00",
       sell_price: Number(data.sell_price).toFixed(2),
     };
   }
@@ -118,9 +126,36 @@ export default function ProductFormDialog({ open, onClose, editing }: Props) {
     setInverterType("ongrid");
   };
 
-  const { register, handleSubmit, reset, setValue } = useForm<any>({
+  const { register, handleSubmit, reset, setValue, watch } = useForm<any>({
     defaultValues: editing || {},
   });
+
+  const [uploadingFile, setUploadingFile] = useState(false);
+  const watchDataSheetUrl = watch("dataSheetUrl");
+  const watchDataSheetName = watch("dataSheetName");
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingFile(true);
+    try {
+      const storageRef = ref(storage, `datasheets/${productType}/${Date.now()}_${file.name}`);
+      const snapshot = await uploadBytes(storageRef, file);
+      const downloadUrl = await getDownloadURL(snapshot.ref);
+      setValue("dataSheetUrl", downloadUrl, { shouldDirty: true });
+      setValue("dataSheetName", file.name, { shouldDirty: true });
+      toast({ title: "Datasheet uploaded successfully!" });
+    } catch (err: any) {
+      console.error(err);
+      toast({
+        title: "Upload failed",
+        description: err.message,
+        variant: "destructive",
+      });
+    } finally {
+      setUploadingFile(false);
+    }
+  };
 
 useEffect(() => {
     if (open) {
@@ -230,12 +265,12 @@ useEffect(() => {
             <Field label="Warranty (Years)" required>
               <Input {...register("warranty", { required: true })} type="number" placeholder="5" className="h-9 text-sm" />
             </Field>
-            <Field label="Inventory / Batch Qty" required>
-              <Input {...register("qty", { required: true })} type="number" placeholder="10" className="h-9 text-sm" />
+            <Field label="Inventory / Batch Qty">
+              <Input {...register("qty", { required: false })} type="number" placeholder="1" className="h-9 text-sm" />
             </Field>
-            <Field label="Buy price (LKR)" required>
+            <Field label="Buy price (LKR)">
               <Input 
-                {...register("buy_price", { required: true })} 
+                {...register("buy_price", { required: false })} 
                 type="number" 
                 step="any" 
                 placeholder="0" 
@@ -358,8 +393,8 @@ useEffect(() => {
                 <Field label="Cycle count" required>
                   <Input {...register("cycle_count", { required: true })} type="number" placeholder="6000" className="h-9 text-sm" />
                 </Field>
-                <Field label="Battery model type" required col2>
-                  <Input {...register("battery_model_type", { required: true })} placeholder="Wall-mounted" className="h-9 text-sm" />
+                <Field label="Battery model type" col2>
+                  <Input {...register("battery_model_type", { required: false })} placeholder="Wall-mounted" className="h-9 text-sm" />
                 </Field>
               </>
             )}
@@ -395,6 +430,57 @@ useEffect(() => {
                 </Field>
               </>
             )}
+
+            {/* ── TECHNICAL DATASHEET UPLOAD ── */}
+            <Section title="Technical Datasheet" />
+            <div className="col-span-2">
+              <Field label="Product Datasheet (PDF/Image)" hint="Optional. Upload manufacturer technical datasheet to attach with proposals.">
+                <div className="mt-1 flex items-center gap-4 rounded-xl border border-dashed border-zinc-200 bg-zinc-50/50 p-4 transition-all hover:bg-zinc-50">
+                  {uploadingFile ? (
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground py-2 pl-2">
+                      <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                      <span>Uploading datasheet to secure cloud storage...</span>
+                    </div>
+                  ) : watchDataSheetUrl ? (
+                    <div className="flex flex-1 items-center justify-between gap-3">
+                      <div className="flex items-center gap-2">
+                        <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700">📄</span>
+                        <div className="text-left">
+                          <p className="text-xs font-semibold text-zinc-800 line-clamp-1">{watchDataSheetName || "datasheet.pdf"}</p>
+                          <a href={watchDataSheetUrl} target="_blank" rel="noreferrer" className="text-[10px] font-medium text-primary hover:underline">View live datasheet</a>
+                        </div>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 text-xs font-medium text-destructive hover:bg-destructive/5 hover:text-destructive shrink-0"
+                        onClick={() => {
+                          setValue("dataSheetUrl", "");
+                          setValue("dataSheetName", "");
+                        }}
+                      >
+                        Remove
+                      </Button>
+                    </div>
+                  ) : (
+                    <label className="flex w-full cursor-pointer flex-col items-center justify-center py-3">
+                      <div className="flex flex-col items-center justify-center space-y-1 text-center">
+                        <span className="text-2xl">📤</span>
+                        <p className="text-xs font-semibold text-zinc-700">Click to upload or drag & drop</p>
+                        <p className="text-[10px] text-zinc-400">PDF, JPG, PNG up to 10MB</p>
+                      </div>
+                      <input
+                        type="file"
+                        accept="application/pdf,image/*"
+                        className="hidden"
+                        onChange={handleFileUpload}
+                      />
+                    </label>
+                  )}
+                </div>
+              </Field>
+            </div>
 
           </div>
 

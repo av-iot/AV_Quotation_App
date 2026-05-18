@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/input";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
-import { Receipt, Search, Download, Eye, Loader2, Trash2, ArrowRight } from "lucide-react";
+import { Receipt, Search, Download, Eye, Loader2, Trash2, ArrowRight, Pencil } from "lucide-react";
 import type { Quotation, QuotationStatus } from "@/types";
 
 const STATUS_CONFIG: Record<QuotationStatus, { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
@@ -178,10 +178,13 @@ export default function QuotationsPage() {
                             </Link>
                           </Button>
                           <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-primary" title="Next Step / Details" asChild>
-                            <Link href={`/quotations/${qtn.id}`}>
-                              <ArrowRight className="h-3.5 w-3.5" />
-                            </Link>
+                            <Link href={`/quotations/${qtn.id}`}><ArrowRight className="h-3.5 w-3.5" /></Link>
                           </Button>
+                          {canCRUD && (
+                            <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-amber-500" title="Edit Quotation" asChild>
+                              <Link href={`/quotations/${qtn.id}?edit=true`}><Pencil className="h-3.5 w-3.5" /></Link>
+                            </Button>
+                          )}
                           {qtn.docxUrl && (
                             <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-green-500" title="Download Word" asChild>
                               <a href={qtn.docxUrl} target="_blank" rel="noreferrer">

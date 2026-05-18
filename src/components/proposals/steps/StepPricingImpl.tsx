@@ -23,6 +23,7 @@ export default function StepPricing({ onNext }: { onNext: () => void }) {
   const { register, watch, setValue } = useFormContext<ProposalFormData>();
   const numOptions = watch("numOptions");
   const sysType    = watch("sysType");
+  const utility    = watch("utility") || "CEB";
 
   // ── Payment terms ──────────────────────────────────────────────────────────
   const pay1Raw = watch("pay1") || "";
@@ -78,30 +79,32 @@ export default function StepPricing({ onNext }: { onNext: () => void }) {
 
   return (
     <motion.div initial="initial" animate="animate" className="space-y-4">
+      {/* ── Additional charges (Only if utility is CEB) ── */}
+      {utility === "CEB" && (
+        <motion.div variants={fadeUp}>
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Additional charges</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-1.5">
+                <Label className="text-sm">CEB chargers (Rs.)</Label>
+                <Input
+                  {...register("cebCharges")}
+                  type="number"
+                  placeholder="0"
+                  className="h-9"
+                />
+                <p className="text-xs text-muted-foreground">This value will be saved for future use.</p>
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
+      )}
+
       {Array.from({ length: numOptions }, (_, idx) => (
         <OptionPricing key={idx} idx={idx} sysType={sysType} />
       ))}
-
-      {/* ── Additional charges ── */}
-      <motion.div variants={fadeUp}>
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base">Additional charges</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-1.5">
-              <Label className="text-sm">CEB chargers (Rs.)</Label>
-              <Input
-                {...register("cebCharges")}
-                type="number"
-                placeholder="0"
-                className="h-9"
-              />
-              <p className="text-xs text-muted-foreground">This value will be saved for future use.</p>
-            </div>
-          </CardContent>
-        </Card>
-      </motion.div>
 
       {/* ── Payment terms ── */}
       <motion.div variants={fadeUp}>
@@ -272,7 +275,7 @@ const batTotal     = batteryQty  * getProductSellPrice(batteryProductId ?? 0);
       if (hasShading) {
         gen -= shadingReduction;
       }
-      setValue(`${prefix}.expectedGen`, Math.round(gen).toString());
+      setValue(`${prefix}.expectedGen`, (Math.floor(gen / 10) * 10).toString());
     }
   }, [panelProductId, panelQty, oversize, hasShading, shadingReduction, setValue, prefix]);
 
@@ -304,7 +307,8 @@ const batTotal     = batteryQty  * getProductSellPrice(batteryProductId ?? 0);
   }, [inverterProductId, sysType, setValue, prefix]);
 
   // ── Totals ────────────────────────────────────────────────────────────────
-  const cebCharges  = parseFloat(watch("cebCharges") || "0") || 0;
+  const utility = watch("utility") || "CEB";
+  const cebCharges  = utility === "CEB" ? (parseFloat(watch("cebCharges") || "0") || 0) : 0;
   const subtotal    = sysPrice + structPrice + installPrice + cebCharges;
   const discountAmt = (subtotal * discountPct) / 100;
   const finalPrice  = subtotal - discountAmt;

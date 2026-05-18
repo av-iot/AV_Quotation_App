@@ -112,7 +112,7 @@ export default function DashboardPage() {
       trend: calcTrend(currentQuotations.length, prevQuotations.length)
     },
     { 
-      label: "Revenue Pipeline", 
+      label: "Revenue", 
       value: `Rs. ${(currentRevenue / 1000000).toFixed(2)}M`, 
       icon: Banknote, 
       color: "bg-purple-50 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400",
@@ -134,7 +134,7 @@ export default function DashboardPage() {
   const canCRUD = user?.role && ["superadmin", "admin", "authorized"].includes(user.role);
 
   const filteredStats = useMemo(() => {
-    return stats.filter(s => s.label !== "Revenue Pipeline" || canViewMoney);
+    return stats.filter(s => s.label !== "Revenue" || canViewMoney);
   }, [stats, canViewMoney]);
 
   if (loading) {
@@ -152,7 +152,7 @@ export default function DashboardPage() {
             {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
           </div>
           <h1 className="text-4xl font-black text-foreground tracking-tight mb-2">Good {getGreeting()}, {user?.displayName?.split(" ")[0] || "there"} 👋</h1>
-          <p className="text-base text-muted-foreground">Here is your solar sales pipeline overview.</p>
+          <p className="text-base text-muted-foreground">Here is your solar sales overview.</p>
         </div>
         
         <div className="flex flex-col sm:flex-row gap-3 relative z-10 w-full lg:w-auto">

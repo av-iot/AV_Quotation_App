@@ -87,6 +87,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           const isSuperAdminEmail =
             fbUser.email === "admin@altavision.lk" ||
             fbUser.email === "dev@altavision.lk" ||
+            fbUser.email === "devopsaltavision@gmail.com" ||
             fbUser.email === process.env.NEXT_PUBLIC_SUPER_ADMIN_EMAIL;
 
           if (userSnap.exists()) {
@@ -117,6 +118,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           const isSuperAdminEmail =
             fbUser.email === "admin@altavision.lk" ||
             fbUser.email === "dev@altavision.lk" ||
+            fbUser.email === "devopsaltavision@gmail.com" ||
             fbUser.email === process.env.NEXT_PUBLIC_SUPER_ADMIN_EMAIL;
           userRole = isSuperAdminEmail ? "superadmin" : "viewer";
         }

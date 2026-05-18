@@ -11,7 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { FileText, Plus, Search, Download, Eye, Loader2, Trash2, ArrowRight } from "lucide-react";
+import { FileText, Plus, Search, Download, Eye, Loader2, Trash2, ArrowRight, Pencil } from "lucide-react";
 import type { Proposal, ProposalStatus } from "@/types";
 
 const STATUS: Record<ProposalStatus, { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
@@ -138,6 +138,11 @@ export default function ProposalsPage() {
                           <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-primary" title="Next Step / Details" asChild>
                             <Link href={`/proposals/${p.id}`}><ArrowRight className="h-3.5 w-3.5" /></Link>
                           </Button>
+                          {canCRUD && (
+                            <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-amber-500" title="Edit Proposal" asChild>
+                              <Link href={`/proposals/${p.id}/edit`}><Pencil className="h-3.5 w-3.5" /></Link>
+                            </Button>
+                          )}
                           {p.docxUrl && (
                             <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-green-500" title="Download Word" asChild>
                               <a href={p.docxUrl} target="_blank" rel="noreferrer"><Download className="h-3.5 w-3.5" /></a>
