@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
@@ -49,6 +49,20 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const router = useRouter();
   const { theme, setTheme } = useTheme();
   const { user, loading, signOut } = useAuth();
+
+  const navItems = useMemo(() => {
+    const items = [
+      { href: "/", icon: LayoutDashboard, label: "Dashboard" },
+      { href: "/proposals", icon: FileText, label: "Proposals", badge: null },
+      { href: "/quotations", icon: Receipt, label: "Quotations", badge: null },
+      { href: "/products",  icon: Package,          label: "Products" },
+      { href: "/activity", icon: Activity, label: "Activity Logs" },
+    ];
+    if (user?.role === "superadmin") {
+      items.push({ href: "/users", icon: Settings, label: "User Roles" });
+    }
+    return items;
+  }, [user]);
 
   const handleInteract = () => {
     setShowToggle(true);
@@ -154,7 +168,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
         {/* Nav items */}
         <nav className="flex-1 space-y-1 overflow-y-auto p-3">
-          {NAV_ITEMS.map(({ href, icon: Icon, label, badge }) => {
+          {navItems.map(({ href, icon: Icon, label, badge }) => {
             const isActive =
               href === "/" ? pathname === "/" : pathname.startsWith(href);
             return (

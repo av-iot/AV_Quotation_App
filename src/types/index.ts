@@ -1,11 +1,12 @@
-// ─── Auth ────────────────────────────────────────────────────────────────────
+export type UserRole = "superadmin" | "admin" | "authorized" | "stakeholder" | "viewer";
+
 export interface AppUser {
   uid: string;
   email: string;
   displayName: string | null;
   photoURL: string | null;
   source: "myiot" | "google";
-  role: "admin" | "engineer" | "viewer";
+  role: UserRole;
 }
 
 // ─── Products / catalog ──────────────────────────────────────────────────────

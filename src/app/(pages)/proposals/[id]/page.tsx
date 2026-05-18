@@ -283,6 +283,7 @@ export default function ProposalDetailPage() {
   }
 
   const canGenerate = proposal.status !== "converted" && proposal.status !== "expired";
+  const canCRUD = user?.role && ["superadmin", "admin", "authorized"].includes(user.role);
 
   return (
     <div className="p-6 mx-auto max-w-4xl">
@@ -312,7 +313,7 @@ export default function ProposalDetailPage() {
           </div>
         </div>
         <div className="flex gap-2 flex-wrap">
-          {canGenerate && (
+          {canGenerate && canCRUD && (
             <Button
               onClick={() => setShowModal(true)}
               className="gap-2 bg-green-600 hover:bg-green-700 text-white"

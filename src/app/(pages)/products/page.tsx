@@ -7,6 +7,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useToast } from "@/hooks/use-toast";
 import type { Product, ProductType, InverterProduct, BatteryProduct, PanelProduct } from "@/types";
 import ProductFormDialog from "@/components/products/ProductFormDialog";
+import { useAuth } from "@/lib/auth-context";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -22,7 +23,9 @@ const fmtRs = (n: number | string) => {
 };
 
 export default function ProductsPage() {
+  const { user } = useAuth();
   const { toast } = useToast();
+  const isAdmin = user?.role && ["superadmin", "admin"].includes(user.role);
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -83,10 +86,12 @@ export default function ProductsPage() {
             <p className="text-sm text-muted-foreground">Manage inverters, batteries and panels</p>
           </div>
         </div>
-        <Button onClick={openAdd} className="gap-2 bg-primary hover:bg-primary/90">
-  <Plus className="h-4 w-4" />
-  Add product
-</Button>
+        {isAdmin && (
+          <Button onClick={openAdd} className="gap-2 bg-primary hover:bg-primary/90">
+            <Plus className="h-4 w-4" />
+            Add product
+          </Button>
+        )}
       </div>
 
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as ProductType)}>
@@ -122,7 +127,11 @@ export default function ProductsPage() {
                 ) : filtered.length === 0 ? (
                   <div className="flex h-40 flex-col items-center justify-center gap-3">
                     <p className="text-sm text-muted-foreground">{search ? "No results." : `No ${tabVal}s added yet.`}</p>
-                    <Button size="sm" onClick={openAdd} className="gap-2"><Plus className="h-3.5 w-3.5" />Add first {tabVal}</Button>
+                    {isAdmin && (
+                      <Button size="sm" onClick={openAdd} className="gap-2">
+                        <Plus className="h-3.5 w-3.5" />Add first {tabVal}
+                      </Button>
+                    )}
                   </div>
                 ) : (
                   <Table>
@@ -178,25 +187,34 @@ export default function ProductsPage() {
                                 <span className="text-xs text-muted-foreground">B: {fmtRs((p as any).buy_price)}</span>
                                 <span className="font-medium">S: {fmtRs((p as any).sell_price)}</span>
                               </div>
-                            </TableCell>                     <TableCell className="py-3">
-                              <button onClick={() => handleToggleActive(p)}>
-                                <Badge variant={p.active ? "default" : "secondary"} className="cursor-pointer text-xs">
-                                  {p.active ? "Active" : "Inactive"}
-                                </Badge>
-                              </button>
                             </TableCell>
                             <TableCell className="py-3">
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                  <Button variant="ghost" size="icon" className="h-7 w-7">
-                                    {deleting === p.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <MoreVertical className="h-3.5 w-3.5" />}
-                                  </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end">
-                                  <DropdownMenuItem onClick={() => openEdit(p)}><Pencil className="mr-2 h-3.5 w-3.5" />Edit</DropdownMenuItem>
-                                  <DropdownMenuItem onClick={() => handleDelete(p.id)} className="text-destructive focus:text-destructive"><Trash2 className="mr-2 h-3.5 w-3.5" />Delete</DropdownMenuItem>
-                                </DropdownMenuContent>
-                              </DropdownMenu>
+                              {isAdmin ? (
+                                <button onClick={() => handleToggleActive(p)}>
+                                  <Badge variant={p.active ? "default" : "secondary"} className="cursor-pointer text-xs">
+                                    {p.active ? "Active" : "Inactive"}
+                                  </Badge>
+                                </button>
+                              ) : (
+                                <Badge variant={p.active ? "default" : "secondary"} className="text-xs">
+                                  {p.active ? "Active" : "Inactive"}
+                                </Badge>
+                              )}
+                            </TableCell>
+                            <TableCell className="py-3">
+                              {isAdmin && (
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                    <Button variant="ghost" size="icon" className="h-7 w-7">
+                                      {deleting === p.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <MoreVertical className="h-3.5 w-3.5" />}
+                                    </Button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent align="end">
+                                    <DropdownMenuItem onClick={() => openEdit(p)}><Pencil className="mr-2 h-3.5 w-3.5" />Edit</DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => handleDelete(p.id)} className="text-destructive focus:text-destructive"><Trash2 className="mr-2 h-3.5 w-3.5" />Delete</DropdownMenuItem>
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
+                              )}
                             </TableCell>
                           </motion.tr>
                         ))}

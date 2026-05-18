@@ -8,7 +8,7 @@ import React, {
   useState,
 } from "react";
 import { onAuthStateChanged, User } from "firebase/auth";
-import { auth, signInWithGoogle, signOut } from "@/lib/firebase";
+import { auth, signInWithGoogle, signOut, db } from "@/lib/firebase";
 import type { AppUser } from "@/types";
 
 interface AuthContextValue {
@@ -40,7 +40,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         displayName: "Dev User",
         photoURL: null,
         source: "google",
-        role: "engineer",
+        role: "superadmin", // Dev user gets full Super Admin privilege for visual/sandbox QA
       });
       setLoading(false);
       return; // Skip Firebase auth listener entirely in dev mode
@@ -77,13 +77,57 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           return;
         }
 
+        // Fetch or create user role in Firestore
+        let userRole: any = "viewer";
+        try {
+          const { doc, getDoc, setDoc } = await import("firebase/firestore");
+          const userDocRef = doc(db, "users", fbUser.uid);
+          const userSnap = await getDoc(userDocRef);
+
+          const isSuperAdminEmail =
+            fbUser.email === "admin@altavision.lk" ||
+            fbUser.email === "dev@altavision.lk" ||
+            fbUser.email === process.env.NEXT_PUBLIC_SUPER_ADMIN_EMAIL;
+
+          if (userSnap.exists()) {
+            const userData = userSnap.data();
+            userRole = userData.role || "viewer";
+
+            // If it is the designated superadmin email, force superadmin role
+            if (isSuperAdminEmail && userRole !== "superadmin") {
+              userRole = "superadmin";
+              await setDoc(userDocRef, { role: "superadmin" }, { merge: true });
+            }
+          } else {
+            // New user registered: default role is viewer
+            userRole = isSuperAdminEmail ? "superadmin" : "viewer";
+            await setDoc(userDocRef, {
+              uid: fbUser.uid,
+              email: fbUser.email,
+              displayName: fbUser.displayName || null,
+              photoURL: fbUser.photoURL || null,
+              source: "google",
+              role: userRole,
+              createdAt: new Date().toISOString(),
+              lastSeen: new Date().toISOString(),
+            });
+          }
+        } catch (dbErr) {
+          console.error("Failed to read user role from database, falling back:", dbErr);
+          const isSuperAdminEmail =
+            fbUser.email === "admin@altavision.lk" ||
+            fbUser.email === "dev@altavision.lk" ||
+            fbUser.email === process.env.NEXT_PUBLIC_SUPER_ADMIN_EMAIL;
+          userRole = isSuperAdminEmail ? "superadmin" : "viewer";
+        }
+
         setUser({
           uid: fbUser.uid,
           email: fbUser.email!,
           displayName: fbUser.displayName || null,
           photoURL: fbUser.photoURL || null,
           source: "google",
-          role: "engineer",
+          role: userRole,
         });
       } else {
         setFirebaseUser(null);
@@ -116,7 +160,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         displayName: "Dev User",
         photoURL: null,
         source: "google",
-        role: "engineer",
+        role: "superadmin",
       });
       setLoading(false);
     } catch (err) {

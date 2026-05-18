@@ -29,6 +29,8 @@ export default function ProposalsPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
 
+  const canCRUD = user?.role && ["superadmin", "admin", "authorized"].includes(user.role);
+
   useEffect(() => {
     if (!firebaseUser) return;
     const q = query(collection(db, "proposals"), orderBy("createdAt", "desc"));
@@ -56,12 +58,14 @@ export default function ProposalsPage() {
             <p className="text-sm text-muted-foreground">All solar PV quotations</p>
           </div>
         </div>
-        <Button asChild className="gap-2 bg-primary hover:bg-primary/90">
-          <Link href="/proposals/new">
-            <Plus className="h-4 w-4" />
-            New proposal
-          </Link>
-        </Button>
+        {canCRUD && (
+          <Button asChild className="gap-2 bg-primary hover:bg-primary/90">
+            <Link href="/proposals/new">
+              <Plus className="h-4 w-4" />
+              New proposal
+            </Link>
+          </Button>
+        )}
       </div>
 
       <Card>
@@ -139,31 +143,33 @@ export default function ProposalsPage() {
                               <a href={p.docxUrl} target="_blank" rel="noreferrer"><Download className="h-3.5 w-3.5" /></a>
                             </Button>
                           )}
-                          <Button 
-                            variant="ghost" 
-                            size="icon" 
-                            className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                            title="Delete"
-                            onClick={async () => {
-                              if (window.confirm("Are you really sure ?")) {
-                                try {
-                                  const { deleteDoc, doc } = await import("firebase/firestore");
-                                  await deleteDoc(doc(db, "proposals", p.id));
+                          {canCRUD && (
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                              title="Delete"
+                              onClick={async () => {
+                                if (window.confirm("Are you really sure ?")) {
+                                  try {
+                                    const { deleteDoc, doc } = await import("firebase/firestore");
+                                    await deleteDoc(doc(db, "proposals", p.id));
 
-                                  const { logActivityClient } = await import("@/lib/audit-logger-client");
-                                  await logActivityClient(user, "PROPOSAL_DELETE", {
-                                    proposalId: p.id,
-                                    qtnNo: p.qtnNo,
-                                    customerName: p.customer?.name || "",
-                                  });
-                                } catch (error) {
-                                  console.error("Failed to delete proposal:", error);
+                                    const { logActivityClient } = await import("@/lib/audit-logger-client");
+                                    await logActivityClient(user, "PROPOSAL_DELETE", {
+                                      proposalId: p.id,
+                                      qtnNo: p.qtnNo,
+                                      customerName: p.customer?.name || "",
+                                    });
+                                  } catch (error) {
+                                    console.error("Failed to delete proposal:", error);
+                                  }
                                 }
-                              }
-                            }}
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </Button>
+                              }}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          )}
                         </div>
                       </TableCell>
                     </motion.tr>
