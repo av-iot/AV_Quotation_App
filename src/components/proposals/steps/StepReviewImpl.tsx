@@ -137,7 +137,7 @@ export default function StepReview({ onNext }: { onNext: () => void }) {
         const sysPrice    = parseFloat(opt.sysPrice    || "0") || 0;
         const structPrice = parseFloat(opt.structPrice  || "0") || 0;
         const installPrice= parseFloat((opt as any).installPrice || "0") || 0;
-        const cebCharges  = parseFloat(f.cebCharges || "0") || 0;
+        const cebCharges  = f.utility === "CEB" ? (parseFloat(f.cebCharges || "0") || 0) : 0;
         const discount    = parseFloat((opt as any).discount    || "0") || 0;
         const subtotal    = sysPrice + structPrice + installPrice + cebCharges;
         const discAmt     = (subtotal * discount) / 100;
@@ -206,7 +206,7 @@ export default function StepReview({ onNext }: { onNext: () => void }) {
                   <Row label="System price"    value={fmtRs(sysPrice)} />
                   {structPrice > 0  && <Row label="Structure price"    value={fmtRs(structPrice)} />}
                   {installPrice > 0 && <Row label="Installation price" value={fmtRs(installPrice)} />}
-                  {cebCharges > 0 && <Row label="CEB chargers" value={fmtRs(cebCharges)} />}
+                  {cebCharges > 0 && f.utility === "CEB" && <Row label="CEB chargers" value={fmtRs(cebCharges)} />}
                   {subtotal > 0     && <Row label="Subtotal"           value={fmtRs(subtotal)} />}
                   {discount > 0     && <Row label={`Discount (${discount}%)`} value={`− ${fmtRs(discAmt)}`} />}
                   <div className="mt-2 flex justify-between rounded-lg bg-primary/5 px-3 py-2.5">

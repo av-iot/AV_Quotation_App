@@ -21,6 +21,8 @@ export function buildProposalFromForm(
         origin: panelData?.origin || "China",
         manufacture: panelData?.manufacture || "China",
         productId: opt.panelProductId,
+        dataSheetUrl: panelData?.dataSheetUrl || "",
+        dataSheetName: panelData?.dataSheetName || "",
       };
 
       const invData = productsMap.get(opt.inverterProductId);
@@ -34,6 +36,8 @@ export function buildProposalFromForm(
         origin: invData?.origin || "China",
         manufacture: invData?.manufacture || "China",
         productId: opt.inverterProductId,
+        dataSheetUrl: invData?.dataSheetUrl || "",
+        dataSheetName: invData?.dataSheetName || "",
       };
 
       const batData = opt.batteryProductId ? productsMap.get(opt.batteryProductId) : null;
@@ -49,6 +53,8 @@ export function buildProposalFromForm(
               origin: batData?.origin || "China",
               manufacture: batData?.manufacture || "China",
               productId: opt.batteryProductId,
+              dataSheetUrl: batData?.dataSheetUrl || "",
+              dataSheetName: batData?.dataSheetName || "",
             }
           : undefined;
 
@@ -57,17 +63,24 @@ export function buildProposalFromForm(
         panel,
         inverter,
         battery,
+        expectedGen: opt.expectedGen || "",
+        afterSalesPeriod: opt.afterSalesPeriod || "",
+        servicesPerYear: opt.servicesPerYear || "",
+        hasShading: opt.hasShading || false,
+        shadingReduction: opt.shadingReduction || "",
         pricing: {
           estOutput: opt.estOutput || "",
           sysPrice: Number(opt.sysPrice) || 0,
-          ...(opt.structPrice ? { structPrice: Number(opt.structPrice) } : {}),
+          structPrice: Number(opt.structPrice) || 0,
+          installPrice: Number(opt.installPrice) || 0,
+          discount: Number(opt.discount) || 0,
           totalPrice: Number(opt.totalPrice || opt.sysPrice) || 0,
           specialStructNote: opt.specialStructNote || false,
         },
       };
     });
 
-  return {
+  const result = {
     qtnNo,
     date: form.date,
     customer: {
@@ -91,7 +104,32 @@ export function buildProposalFromForm(
     pay2: form.pay2 || "0",
     pay3: form.pay3 || "0",
     extraNotes: form.extraNotes || "",
+    cebCharges: form.cebCharges ? Number(form.cebCharges) : 0,
+    validityPeriod: form.validityPeriod || "14",
     status: "draft",
     createdBy: userId,
   };
+
+  return cleanUndefined(result);
+}
+
+function cleanUndefined(obj: any): any {
+  if (obj === null || typeof obj !== "object") {
+    return obj;
+  }
+  
+  if (Array.isArray(obj)) {
+    return obj.map(cleanUndefined);
+  }
+
+  const cleaned: any = {};
+  for (const key in obj) {
+    if (Object.prototype.hasOwnProperty.call(obj, key)) {
+      const val = obj[key];
+      if (val !== undefined) {
+        cleaned[key] = cleanUndefined(val);
+      }
+    }
+  }
+  return cleaned;
 }

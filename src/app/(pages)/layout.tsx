@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
@@ -49,6 +49,21 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const router = useRouter();
   const { theme, setTheme } = useTheme();
   const { user, loading, signOut } = useAuth();
+
+  const navItems = useMemo(() => {
+    const items = [
+      { href: "/", icon: LayoutDashboard, label: "Dashboard" },
+      { href: "/proposals", icon: FileText, label: "Proposals", badge: null },
+      { href: "/quotations", icon: Receipt, label: "Quotations", badge: null },
+      { href: "/products",  icon: Package,          label: "Products" },
+      { href: "/activity", icon: Activity, label: "Activity Logs" },
+    ];
+    if (user?.role === "superadmin") {
+      items.push({ href: "/users", icon: User, label: "User Roles" });
+    }
+    items.push({ href: "/settings", icon: Settings, label: "Settings" });
+    return items;
+  }, [user]);
 
   const handleInteract = () => {
     setShowToggle(true);
@@ -154,7 +169,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
         {/* Nav items */}
         <nav className="flex-1 space-y-1 overflow-y-auto p-3">
-          {NAV_ITEMS.map(({ href, icon: Icon, label, badge }) => {
+          {navItems.map(({ href, icon: Icon, label, badge }) => {
             const isActive =
               href === "/" ? pathname === "/" : pathname.startsWith(href);
             return (
@@ -220,22 +235,109 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 </AnimatePresence>
               </button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-48">
-              <DropdownMenuLabel>My Account</DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => setTheme(theme === "dark" ? "light" : "dark")}>
-                {theme === "dark" ? (
-                  <Sun className="mr-2 h-4 w-4" />
-                ) : (
-                  <Moon className="mr-2 h-4 w-4" />
+            <DropdownMenuContent align={collapsed ? "center" : "end"} className="w-72 p-4 rounded-2xl shadow-xl border bg-card text-card-foreground" side="right" sideOffset={12}>
+              {/* Premium Header Block */}
+              <div className="flex items-center gap-3 pb-3.5 border-b border-border">
+                <Avatar className="h-12 w-12 border-2 border-primary/20 shadow-sm shrink-0">
+                  <AvatarImage src={user?.photoURL || undefined} referrerPolicy="no-referrer" />
+                  <AvatarFallback className="bg-primary/10 text-primary text-base font-bold">
+                    {user?.displayName?.charAt(0) || user?.email?.charAt(0) || "?"}
+                  </AvatarFallback>
+                </Avatar>
+                <div className="min-w-0 flex-grow">
+                  <p className="truncate text-sm font-bold text-foreground leading-tight">{user?.displayName || "User"}</p>
+                  <p className="truncate text-[10px] text-muted-foreground mt-0.5 mb-1.5">{user?.email}</p>
+                  
+                  {/* Dynamic Role Badge */}
+                  <div className="flex gap-1.5 flex-wrap items-center">
+                    <Badge variant={
+                      user?.role === "superadmin" ? "default" :
+                      user?.role === "admin" ? "default" :
+                      user?.role === "authorized" ? "secondary" : "outline"
+                    } className="text-[9px] uppercase tracking-wider font-extrabold px-2 py-0.5 h-auto">
+                      {user?.role === "superadmin" ? "Super Admin" :
+                       user?.role === "admin" ? "Admin" :
+                       user?.role === "authorized" ? "Authorized" :
+                       user?.role === "stakeholder" ? "Stakeholder" : "Viewer"}
+                    </Badge>
+                    <Badge variant="outline" className="text-[9px] font-semibold text-muted-foreground bg-muted/30 border-muted-foreground/10 px-1.5 py-0.5 h-auto capitalize">
+                      {user?.source || "google"}
+                    </Badge>
+                  </div>
+                </div>
+              </div>
+
+              {/* Account Details & Diagnostic Stats */}
+              <div className="py-3.5 space-y-3.5 border-b border-border">
+                {/* Permissions Pipeline */}
+                <div>
+                  <span className="text-[8px] font-black text-muted-foreground uppercase tracking-widest block mb-1.5">Security Context</span>
+                  <div className="bg-muted/45 rounded-xl p-2.5 border border-border/40 text-[10.5px] leading-relaxed text-muted-foreground">
+                    {user?.role === "superadmin" && "Full administrative permissions, global system configuration, role access pipeline settings, database structures."}
+                    {user?.role === "admin" && "Administrative permissions, catalog modifications, inverter/panel product configurations."}
+                    {user?.role === "authorized" && "Authorized user credentials. Full proposal and quotation creation, editing, conversion."}
+                    {user?.role === "stakeholder" && "Financial stakeholder view. Read-only permissions with dashboard revenue metrics pipeline."}
+                    {user?.role === "viewer" && "Default viewer permissions. Read-only catalog visibility, PDF viewing, downloads."}
+                  </div>
+                </div>
+
+                {/* Technical Diagnostic details */}
+                <div className="grid grid-cols-2 gap-x-2 gap-y-1.5 text-[10px]">
+                  <div>
+                    <span className="text-muted-foreground/80 block">Access Protocol</span>
+                    <span className="font-bold text-foreground flex items-center gap-1 mt-0.5">
+                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                      OAuth 2.0 SSL
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground/80 block">Privilege Level</span>
+                    <span className="font-bold text-foreground mt-0.5 block">
+                      {user?.role === "superadmin" ? "Level 5 (Max)" :
+                       user?.role === "admin" ? "Level 4" :
+                       user?.role === "authorized" ? "Level 3" :
+                       user?.role === "stakeholder" ? "Level 2" : "Level 1"}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Actions / settings */}
+              <div className="pt-2 space-y-1">
+                <DropdownMenuItem 
+                  onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+                  className="rounded-lg py-2 cursor-pointer text-xs font-semibold text-foreground hover:bg-accent transition-all flex items-center"
+                >
+                  {theme === "dark" ? (
+                    <Sun className="mr-2 h-4 w-4 text-amber-500 animate-spin-slow" />
+                  ) : (
+                    <Moon className="mr-2 h-4 w-4 text-blue-500" />
+                  )}
+                  {theme === "dark" ? "Switch to Light Mode" : "Switch to Dark Mode"}
+                </DropdownMenuItem>
+
+                {user?.role === "superadmin" && (
+                  <DropdownMenuItem 
+                    asChild 
+                    className="rounded-lg py-2 cursor-pointer text-xs font-semibold text-foreground hover:bg-accent transition-all flex items-center"
+                  >
+                    <Link href="/users">
+                      <Settings className="mr-2 h-4 w-4 text-zinc-500" />
+                      Global Access Control
+                    </Link>
+                  </DropdownMenuItem>
                 )}
-                {theme === "dark" ? "Light mode" : "Dark mode"}
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={signOut} className="text-destructive focus:text-destructive">
-                <LogOut className="mr-2 h-4 w-4" />
-                Sign out
-              </DropdownMenuItem>
+
+                <DropdownMenuSeparator className="my-1.5" />
+                
+                <DropdownMenuItem 
+                  onClick={signOut} 
+                  className="rounded-lg py-2 cursor-pointer text-xs font-bold text-destructive hover:bg-destructive/10 hover:text-destructive focus:bg-destructive/10 focus:text-destructive transition-all flex items-center"
+                >
+                  <LogOut className="mr-2 h-4 w-4 shrink-0" />
+                  Secure Sign Out
+                </DropdownMenuItem>
+              </div>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>

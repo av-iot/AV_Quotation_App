@@ -11,7 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { FileText, Plus, Search, Download, Eye, Loader2, Trash2, ArrowRight } from "lucide-react";
+import { FileText, Plus, Search, Download, Eye, Loader2, Trash2, ArrowRight, Pencil } from "lucide-react";
 import type { Proposal, ProposalStatus } from "@/types";
 
 const STATUS: Record<ProposalStatus, { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
@@ -28,6 +28,8 @@ export default function ProposalsPage() {
   const [proposals, setProposals] = useState<Proposal[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+
+  const canCRUD = user?.role && ["superadmin", "admin", "authorized"].includes(user.role);
 
   useEffect(() => {
     if (!firebaseUser) return;
@@ -56,12 +58,14 @@ export default function ProposalsPage() {
             <p className="text-sm text-muted-foreground">All solar PV quotations</p>
           </div>
         </div>
-        <Button asChild className="gap-2 bg-primary hover:bg-primary/90">
-          <Link href="/proposals/new">
-            <Plus className="h-4 w-4" />
-            New proposal
-          </Link>
-        </Button>
+        {canCRUD && (
+          <Button asChild className="gap-2 bg-primary hover:bg-primary/90">
+            <Link href="/proposals/new">
+              <Plus className="h-4 w-4" />
+              New proposal
+            </Link>
+          </Button>
+        )}
       </div>
 
       <Card>
@@ -134,36 +138,43 @@ export default function ProposalsPage() {
                           <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-primary" title="Next Step / Details" asChild>
                             <Link href={`/proposals/${p.id}`}><ArrowRight className="h-3.5 w-3.5" /></Link>
                           </Button>
+                          {canCRUD && (
+                            <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-amber-500" title="Edit Proposal" asChild>
+                              <Link href={`/proposals/${p.id}/edit`}><Pencil className="h-3.5 w-3.5" /></Link>
+                            </Button>
+                          )}
                           {p.docxUrl && (
                             <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-green-500" title="Download Word" asChild>
                               <a href={p.docxUrl} target="_blank" rel="noreferrer"><Download className="h-3.5 w-3.5" /></a>
                             </Button>
                           )}
-                          <Button 
-                            variant="ghost" 
-                            size="icon" 
-                            className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                            title="Delete"
-                            onClick={async () => {
-                              if (window.confirm("Are you really sure ?")) {
-                                try {
-                                  const { deleteDoc, doc } = await import("firebase/firestore");
-                                  await deleteDoc(doc(db, "proposals", p.id));
+                          {canCRUD && (
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                              title="Delete"
+                              onClick={async () => {
+                                if (window.confirm("Are you really sure ?")) {
+                                  try {
+                                    const { deleteDoc, doc } = await import("firebase/firestore");
+                                    await deleteDoc(doc(db, "proposals", p.id));
 
-                                  const { logActivityClient } = await import("@/lib/audit-logger-client");
-                                  await logActivityClient(user, "PROPOSAL_DELETE", {
-                                    proposalId: p.id,
-                                    qtnNo: p.qtnNo,
-                                    customerName: p.customer?.name || "",
-                                  });
-                                } catch (error) {
-                                  console.error("Failed to delete proposal:", error);
+                                    const { logActivityClient } = await import("@/lib/audit-logger-client");
+                                    await logActivityClient(user, "PROPOSAL_DELETE", {
+                                      proposalId: p.id,
+                                      qtnNo: p.qtnNo,
+                                      customerName: p.customer?.name || "",
+                                    });
+                                  } catch (error) {
+                                    console.error("Failed to delete proposal:", error);
+                                  }
                                 }
-                              }
-                            }}
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </Button>
+                              }}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          )}
                         </div>
                       </TableCell>
                     </motion.tr>

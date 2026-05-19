@@ -14,7 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import {
   ArrowLeft, Download, Loader2, FileText, Check,
-  Receipt, AlertTriangle, Plus,
+  Receipt, AlertTriangle, Plus, Pencil, Lock, Printer,
 } from "lucide-react";
 import Link from "next/link";
 import { motion } from "framer-motion";
@@ -76,6 +76,16 @@ export default function ProposalDetailPage() {
     }
     load();
   }, [id]);
+
+  // Lock selected option to matching first generated quotation if any exist
+  useEffect(() => {
+    if (existingQtns.length > 0) {
+      const firstQtn = existingQtns[0];
+      if (firstQtn && typeof firstQtn.selectedOption === "number") {
+        setSelectedOptionIdx(firstQtn.selectedOption);
+      }
+    }
+  }, [existingQtns]);
 
   // ── Installment context (recomputed when option or existing qtns change) ──
   const ctx = useMemo(() => {
@@ -283,6 +293,7 @@ export default function ProposalDetailPage() {
   }
 
   const canGenerate = proposal.status !== "converted" && proposal.status !== "expired";
+  const canCRUD = user?.role && ["superadmin", "admin", "authorized"].includes(user.role);
 
   return (
     <div className="p-6 mx-auto max-w-4xl">
@@ -312,7 +323,15 @@ export default function ProposalDetailPage() {
           </div>
         </div>
         <div className="flex gap-2 flex-wrap">
-          {canGenerate && (
+          {canCRUD && (
+            <Button variant="outline" className="gap-2" asChild>
+              <Link href={`/proposals/${proposal.id}/edit`}>
+                <Pencil className="h-4 w-4 text-amber-500" />
+                Edit Proposal
+              </Link>
+            </Button>
+          )}
+          {canGenerate && canCRUD && (
             <Button
               onClick={() => setShowModal(true)}
               className="gap-2 bg-green-600 hover:bg-green-700 text-white"
@@ -321,6 +340,12 @@ export default function ProposalDetailPage() {
               {existingQtns.length === 0 ? "Confirm & Convert" : "Generate Next Installment"}
             </Button>
           )}
+          <Button variant="outline" className="gap-2 border-primary text-primary hover:bg-primary/5" asChild>
+            <Link href={`/print/${proposal.id}`} target="_blank">
+              <Printer className="h-4 w-4" />
+              View PDF
+            </Link>
+          </Button>
           {proposal.docxUrl && (
             <Button asChild className="gap-2 bg-primary hover:bg-primary/90">
               <a href={proposal.docxUrl} target="_blank" rel="noreferrer">
@@ -463,31 +488,57 @@ export default function ProposalDetailPage() {
             <CardContent className="space-y-5">
 
               {/* Option selector (only if multiple options) */}
-              {proposal.numOptions > 1 && (
-                <div className="space-y-2">
-                  <label className="text-xs font-semibold text-muted-foreground uppercase">Select Option</label>
-                  <div className="grid gap-2">
-                    {proposal.options.map((opt, i) => (
-                      <button
-                        key={i}
-                        type="button"
-                        onClick={() => setSelectedOptionIdx(i)}
-                        className={`flex flex-col text-left p-3 rounded-lg border-2 transition-all ${
-                          selectedOptionIdx === i
-                            ? "border-green-600 bg-green-50/20 dark:bg-green-950/20"
-                            : "border-muted hover:border-muted-foreground"
-                        }`}
-                      >
-                        <span className="font-bold text-sm text-primary">{opt.label || `Option ${i + 1}`}</span>
-                        <span className="text-xs text-muted-foreground mt-0.5">
-                          {opt.panel.qty}× {opt.panel.brand} / {opt.inverter.qty}× {opt.inverter.brand}
+              {proposal.numOptions > 1 && (() => {
+                const firstQtn = existingQtns[0];
+                const isOptionLocked = existingQtns.length > 0 && firstQtn && typeof firstQtn.selectedOption === "number";
+                const lockedIdx = isOptionLocked ? firstQtn.selectedOption : null;
+
+                return (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-semibold text-muted-foreground uppercase">Select Option</label>
+                      {isOptionLocked && (
+                        <span className="text-[10px] text-amber-600 font-bold bg-amber-50 dark:bg-amber-950/30 px-2 py-0.5 rounded-full border border-amber-200/50 flex items-center gap-1 animate-pulse">
+                          <Lock className="h-2.5 w-2.5" /> Option Locked (Invoiced)
                         </span>
-                        <span className="font-bold text-sm mt-1.5 text-green-600">{fmtRs(opt.pricing.totalPrice)}</span>
-                      </button>
-                    ))}
+                      )}
+                    </div>
+                    <div className="grid gap-2">
+                      {proposal.options.map((opt, i) => {
+                        const isDisabled = isOptionLocked && lockedIdx !== i;
+                        return (
+                          <button
+                            key={i}
+                            type="button"
+                            disabled={isDisabled}
+                            onClick={() => setSelectedOptionIdx(i)}
+                            className={`flex flex-col text-left p-3 rounded-lg border-2 transition-all relative ${
+                              selectedOptionIdx === i
+                                ? "border-green-600 bg-green-50/20 dark:bg-green-950/20"
+                                : isDisabled
+                                ? "border-zinc-100 bg-zinc-50/40 opacity-40 cursor-not-allowed dark:border-zinc-800 dark:bg-zinc-900/40"
+                                : "border-muted hover:border-muted-foreground"
+                            }`}
+                          >
+                            <div className="flex justify-between items-center w-full">
+                              <span className="font-bold text-sm text-primary">{opt.label || `Option ${i + 1}`}</span>
+                              {isOptionLocked && lockedIdx === i && (
+                                <span className="text-[10px] text-green-700 bg-green-50 dark:bg-green-950/40 px-1.5 py-0.5 rounded font-bold border border-green-200 flex items-center gap-0.5">
+                                  <Check className="h-2.5 w-2.5 animate-bounce" /> Selected Option
+                                </span>
+                              )}
+                            </div>
+                            <span className="text-xs text-muted-foreground mt-0.5">
+                              {opt.panel.qty}× {opt.panel.brand} / {opt.inverter.qty}× {opt.inverter.brand}
+                            </span>
+                            <span className="font-bold text-sm mt-1.5 text-green-600">{fmtRs(opt.pricing.totalPrice)}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
-                </div>
-              )}
+                );
+              })()}
 
               {/* Payment summary */}
               <div className="bg-muted/40 rounded-lg p-4 space-y-2 text-sm">

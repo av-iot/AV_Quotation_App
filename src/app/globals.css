@@ -103,10 +103,10 @@
     display: none !important;
   }
 
-  /* A4 single-page output */
+  /* A4 single-page output with optimized margins */
   @page {
     size: A4 portrait;
-    margin: 8mm 10mm;
+    margin: 4mm 8mm !important;
   }
 
   main {
@@ -115,43 +115,84 @@
     overflow: visible !important;
   }
 
-  /* ── Compress quotation A4 card to fit one page ── */
+  /* ── Compress quotation A4 card to fit exactly one page ── */
+  .qtn-a4-card {
+    height: 275mm !important;
+    min-height: 275mm !important;
+    max-height: 275mm !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+    box-sizing: border-box !important;
+    overflow: hidden !important;
+  }
 
-  /* Reduce the between-section gaps (overrides space-y-8) */
+  .qtn-a4-body {
+    padding: 2mm 4mm !important;
+    height: 100% !important;
+    box-sizing: border-box !important;
+    overflow: hidden !important;
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: space-between !important;
+  }
+
+  /* Reduce the between-section gaps */
   .qtn-a4-body > * + * {
-    margin-top: 10px !important;
+    margin-top: 6px !important;
   }
 
-  /* Reduce internal top/bottom padding on each section */
+  /* Reduce internal padding on sections */
   .qtn-a4-body [class*="pt-6"],
-  .qtn-a4-body [class*="pb-6"] {
-    padding-top: 8px !important;
-    padding-bottom: 8px !important;
+  .qtn-a4-body [class*="pb-6"],
+  .qtn-a4-body [class*="pt-8"],
+  .qtn-a4-body [class*="pb-8"] {
+    padding-top: 4px !important;
+    padding-bottom: 4px !important;
   }
 
-  .qtn-a4-body [class*="pt-12"],
-  .qtn-a4-body [class*="pt-8"] {
-    padding-top: 10px !important;
+  .qtn-a4-body [class*="pt-12"] {
+    padding-top: 6px !important;
+  }
+
+  .qtn-a4-body [class*="py-4"] {
+    padding-top: 2px !important;
+    padding-bottom: 2px !important;
+  }
+
+  /* Remove any arbitrary min-heights */
+  .qtn-a4-body [class*="min-h-[80px]"],
+  .qtn-a4-body [class*="min-h-[50px]"] {
+    min-height: 0 !important;
   }
 
   /* Compress multi-column gaps */
   .qtn-a4-body [class*="gap-6"] {
-    gap: 10px !important;
+    gap: 8px !important;
   }
   .qtn-a4-body [class*="gap-4"] {
-    gap: 8px !important;
+    gap: 6px !important;
   }
 
   /* Compress internal spacing lists */
   .qtn-a4-body [class*="space-y-4"] > * + *,
   .qtn-a4-body [class*="space-y-3"] > * + * {
-    margin-top: 4px !important;
+    margin-top: 3px !important;
   }
 
   /* Slightly smaller body text to save vertical space */
   .qtn-a4-body [class*="text-xs"] {
-    font-size: 10px !important;
-    line-height: 1.4 !important;
+    font-size: 9.5px !important;
+    line-height: 1.35 !important;
+  }
+
+  /* Reduce heights of all footer logos slightly to prevent overflow */
+  .qtn-a4-body img {
+    max-height: 28px !important;
+  }
+  .qtn-a4-body img[alt="Alta Vision Brand Family"] {
+    max-height: 38px !important;
   }
 
   /* Prevent page break inside the card */

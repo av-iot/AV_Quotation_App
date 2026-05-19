@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/input";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
-import { Receipt, Search, Download, Eye, Loader2, Trash2, ArrowRight } from "lucide-react";
+import { Receipt, Search, Download, Eye, Loader2, Trash2, ArrowRight, Pencil } from "lucide-react";
 import type { Quotation, QuotationStatus } from "@/types";
 
 const STATUS_CONFIG: Record<QuotationStatus, { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
@@ -33,6 +33,9 @@ export default function QuotationsPage() {
   const [quotations, setQuotations] = useState<Quotation[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+
+  const canViewMoney = !user?.role || ["superadmin", "admin", "authorized", "stakeholder"].includes(user.role);
+  const canCRUD = user?.role && ["superadmin", "admin", "authorized"].includes(user.role);
 
   useEffect(() => {
     if (!firebaseUser) return;
@@ -130,7 +133,7 @@ export default function QuotationsPage() {
                   <TableHead className="text-xs">Ref. No.</TableHead>
                   <TableHead className="text-xs">Customer</TableHead>
                   <TableHead className="text-xs">Date</TableHead>
-                  <TableHead className="text-xs text-right">Total</TableHead>
+                  {canViewMoney && <TableHead className="text-xs text-right">Total</TableHead>}
                   <TableHead className="text-xs">Status</TableHead>
                   <TableHead className="text-xs" />
                 </TableRow>
@@ -150,9 +153,11 @@ export default function QuotationsPage() {
                       </TableCell>
                       <TableCell className="py-3 text-sm">{qtn.customer.name}</TableCell>
                       <TableCell className="py-3 text-sm text-muted-foreground">{qtn.date}</TableCell>
-                      <TableCell className="py-3 text-right text-sm font-medium tabular-nums">
-                        {fmtRs(qtn.total)}
-                      </TableCell>
+                      {canViewMoney && (
+                        <TableCell className="py-3 text-right text-sm font-medium tabular-nums">
+                          {fmtRs(qtn.total)}
+                        </TableCell>
+                      )}
                       <TableCell className="py-3">
                         <Badge variant={STATUS_CONFIG[qtn.paymentStatus]?.variant || "outline"} className="text-xs">
                           {STATUS_CONFIG[qtn.paymentStatus]?.label || qtn.paymentStatus}
@@ -160,7 +165,7 @@ export default function QuotationsPage() {
                       </TableCell>
                       <TableCell className="py-3">
                         <div className="flex gap-1 justify-end">
-                          {qtn.proposalId && qtn.balanceAfter !== undefined && qtn.balanceAfter > 0 && (
+                          {canCRUD && qtn.proposalId && qtn.balanceAfter !== undefined && qtn.balanceAfter > 0 && (
                             <Button variant="outline" size="sm" className="h-7 text-xs border-primary/20 text-primary hover:bg-primary/5 mr-1" asChild>
                               <Link href={`/proposals/${qtn.proposalId}`}>
                                 Next Installment
@@ -173,10 +178,13 @@ export default function QuotationsPage() {
                             </Link>
                           </Button>
                           <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-primary" title="Next Step / Details" asChild>
-                            <Link href={`/quotations/${qtn.id}`}>
-                              <ArrowRight className="h-3.5 w-3.5" />
-                            </Link>
+                            <Link href={`/quotations/${qtn.id}`}><ArrowRight className="h-3.5 w-3.5" /></Link>
                           </Button>
+                          {canCRUD && (
+                            <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-amber-500" title="Edit Quotation" asChild>
+                              <Link href={`/quotations/${qtn.id}?edit=true`}><Pencil className="h-3.5 w-3.5" /></Link>
+                            </Button>
+                          )}
                           {qtn.docxUrl && (
                             <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-green-500" title="Download Word" asChild>
                               <a href={qtn.docxUrl} target="_blank" rel="noreferrer">
@@ -184,31 +192,33 @@ export default function QuotationsPage() {
                               </a>
                             </Button>
                           )}
-                          <Button 
-                            variant="ghost" 
-                            size="icon" 
-                            className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                            title="Delete"
-                            onClick={async () => {
-                              if (window.confirm("Are you really sure ?")) {
-                                try {
-                                  const { deleteDoc, doc } = await import("firebase/firestore");
-                                  await deleteDoc(doc(db, "quotations", qtn.id));
-                                  
-                                  const { logActivityClient } = await import("@/lib/audit-logger-client");
-                                  await logActivityClient(user, "QUOTATION_DELETE", {
-                                    quotationId: qtn.id,
-                                    qtnNo: qtn.qtnNo,
-                                    customerName: qtn.customer?.name || "",
-                                  });
-                                } catch (error) {
-                                  console.error("Failed to delete quotation:", error);
+                          {canCRUD && (
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                              title="Delete"
+                              onClick={async () => {
+                                if (window.confirm("Are you really sure ?")) {
+                                  try {
+                                    const { deleteDoc, doc } = await import("firebase/firestore");
+                                    await deleteDoc(doc(db, "quotations", qtn.id));
+                                    
+                                    const { logActivityClient } = await import("@/lib/audit-logger-client");
+                                    await logActivityClient(user, "QUOTATION_DELETE", {
+                                      quotationId: qtn.id,
+                                      qtnNo: qtn.qtnNo,
+                                      customerName: qtn.customer?.name || "",
+                                    });
+                                  } catch (error) {
+                                    console.error("Failed to delete quotation:", error);
+                                  }
                                 }
-                              }
-                            }}
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </Button>
+                              }}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          )}
                         </div>
                       </TableCell>
                     </motion.tr>

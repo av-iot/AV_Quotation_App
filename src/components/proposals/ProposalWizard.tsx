@@ -71,6 +71,8 @@ const defaultValues: ProposalFormData = {
   pay2: "40",
   pay3: "10",
   extraNotes: "",
+  cebCharges: "",
+  validityPeriod: "14",
 };
 
 const slideVariants = {
@@ -85,7 +87,12 @@ const slideVariants = {
   }),
 };
 
-export default function ProposalWizard() {
+interface ProposalWizardProps {
+  initialData?: any;
+  proposalId?: string;
+}
+
+export default function ProposalWizard({ initialData, proposalId }: ProposalWizardProps = {}) {
   const [step, setStep] = useState(1);
   const [direction, setDirection] = useState(1);
   const [saving, setSaving] = useState(false);
@@ -93,8 +100,65 @@ export default function ProposalWizard() {
   const { toast } = useToast();
   const router = useRouter();
 
+  const mapProposalToFormData = (p: any): ProposalFormData => {
+    const mapOption = (opt: any) => ({
+      sysType: opt.sysType || p.sysType || "ongrid",
+      panelProductId: opt.panel?.productId || "",
+      panelQty: opt.panel?.qty ? String(opt.panel.qty) : "",
+      inverterProductId: opt.inverter?.productId || "",
+      inverterQty: opt.inverter?.qty ? String(opt.inverter.qty) : "",
+      batteryProductId: opt.battery?.productId || "",
+      batteryQty: opt.battery?.qty ? String(opt.battery.qty) : "",
+      batteryDays: opt.batteryDays || p.batteryDays || 1,
+      coo: opt.coo || opt.panel?.origin || "China",
+      oversize: opt.oversize || false,
+      estOutput: opt.pricing?.estOutput || "",
+      sysPrice: opt.pricing?.sysPrice ? String(opt.pricing.sysPrice) : "",
+      structPrice: opt.pricing?.structPrice ? String(opt.pricing.structPrice) : "",
+      installPrice: opt.pricing?.installPrice ? String(opt.pricing.installPrice) : "",
+      discount: opt.pricing?.discount ? String(opt.pricing.discount) : "",
+      totalPrice: opt.pricing?.totalPrice ? String(opt.pricing.totalPrice) : "",
+      specialStructNote: opt.pricing?.specialStructNote || false,
+      expectedGen: opt.expectedGen ? String(opt.expectedGen) : "",
+      afterSalesPeriod: opt.afterSalesPeriod ? String(opt.afterSalesPeriod) : "",
+      servicesPerYear: opt.servicesPerYear ? String(opt.servicesPerYear) : "",
+      hasShading: opt.hasShading || false,
+      shadingReduction: opt.shadingReduction ? String(opt.shadingReduction) : "",
+    });
+
+    return {
+      custName: p.customer?.name || "",
+      qtnNo: p.qtnNo || "",
+      addr: p.customer?.address || "",
+      phone: p.customer?.phone || "",
+      phone2: p.customer?.phone2 || "",
+      email: p.customer?.email || "",
+      sendFormat: p.customer?.sendFormat || ["email"],
+      date: p.date ? p.date.split("T")[0] : new Date().toISOString().split("T")[0],
+      sysType: p.sysType || "ongrid",
+      utility: p.utility || "CEB",
+      phase: p.phase || "1",
+      cutoutCurrent: p.cutoutCurrent || "63",
+      mountType: (p.mountType as any) || "roof",
+      roofType: p.roofType || "tile",
+      powerScheme: p.powerScheme || "Net Accounting",
+      numOptions: (p.numOptions === 2 ? 2 : 1) as any,
+      monthlyUsage: p.monthlyUsage ? String(p.monthlyUsage) : "",
+      batteryDays: p.batteryDays || 1,
+      options: p.options ? p.options.map(mapOption) : [],
+      pay1: p.pay1 || "50",
+      pay2: p.pay2 || "40",
+      pay3: p.pay3 || "10",
+      extraNotes: p.extraNotes || "",
+      cebCharges: p.cebCharges ? String(p.cebCharges) : "",
+      validityPeriod: p.validityPeriod ? String(p.validityPeriod) : "14",
+    };
+  };
+
+  const formValues = initialData ? mapProposalToFormData(initialData) : defaultValues;
+
   const methods = useForm<ProposalFormData>({
-    defaultValues,
+    defaultValues: formValues,
     mode: "onChange",
   });
 
@@ -113,11 +177,78 @@ export default function ProposalWizard() {
     setStep(n);
   }, [step]);
 
+  const getProductsMapFromCache = useCallback((): Map<string, any> => {
+    const productsMap = new Map();
+    if (typeof window !== "undefined") {
+      const cache = (window as any).__productCache;
+      if (cache) {
+        Object.entries(cache).forEach(([id, prod]) => {
+          productsMap.set(id, prod);
+        });
+      }
+    }
+    return productsMap;
+  }, []);
+
   const handleSave = async (status: "draft" | "sent") => {
     if (!firebaseUser && !user) return;
     setSaving(true);
     try {
       const values = methods.getValues();
+
+      if (proposalId) {
+        // Edit Mode: update the existing proposal document directly in Firestore
+        const { doc, updateDoc, serverTimestamp } = await import("firebase/firestore");
+        const { db } = await import("@/lib/firebase");
+        const { buildProposalFromForm } = await import("@/lib/proposal-builder");
+
+        const proposal: any = buildProposalFromForm(
+          values,
+          initialData?.createdBy || user?.uid || "dev_user",
+          getProductsMapFromCache()
+        );
+        // Retain original audit fields
+        proposal.qtnNo = initialData?.qtnNo || values.qtnNo;
+        if (initialData?.propNo) proposal.propNo = initialData.propNo;
+        if (initialData?.createdAt) proposal.createdAt = initialData.createdAt;
+        if (initialData?.createdBy) proposal.createdBy = initialData.createdBy;
+
+        const docRef = doc(db, "proposals", proposalId);
+        await updateDoc(docRef, {
+          ...proposal,
+          status: status as any,
+          updatedAt: serverTimestamp(),
+          updatedBy: user?.uid || "dev_user",
+        });
+
+        // Log proposal update action
+        const { logActivityClient } = await import("@/lib/audit-logger-client");
+        await logActivityClient(user, "PROPOSAL_UPDATE", {
+          proposalId,
+          qtnNo: proposal.qtnNo,
+          customerName: proposal.customer.name,
+          sysType: proposal.sysType,
+          status,
+        });
+
+        // Fire-and-forget: re-generate docx in background for the updated proposal
+        if (status === "sent") {
+          const idToken = firebaseUser ? await firebaseUser.getIdToken() : null;
+          fetch(`${process.env.NEXT_PUBLIC_BASE_URL}/api/proposals/${proposalId}/generate`, {
+            method: "POST",
+            headers: {
+              ...(idToken ? { Authorization: `Bearer ${idToken}` } : {}),
+            },
+          }).catch(console.error);
+        }
+
+        toast({
+          title: "Proposal Updated",
+          description: `Successfully updated Reference: ${proposal.qtnNo}`,
+        });
+        router.push(`/proposals/${proposalId}`);
+        return;
+      }
 
       // Try server API first
       let serverSuccess = false;
@@ -158,7 +289,7 @@ export default function ProposalWizard() {
         const proposal = buildProposalFromForm(
           values,
           user?.uid || "dev_user",
-          new Map() // No products map offline — uses form data directly
+          getProductsMapFromCache()
         );
         proposal.qtnNo = tempQtnNo;
         proposal.status = status as any;
@@ -211,8 +342,10 @@ export default function ProposalWizard() {
           <FileText className="h-5 w-5 text-primary" />
         </div>
         <div>
-          <h1 className="text-xl font-bold">New Proposal</h1>
-          <p className="text-sm text-muted-foreground">Solar PV system quotation builder</p>
+          <h1 className="text-xl font-bold">{proposalId ? "Edit Proposal" : "New Proposal"}</h1>
+          <p className="text-sm text-muted-foreground">
+            {proposalId ? `Editing Reference: ${initialData?.qtnNo || ""}` : "Solar PV system quotation builder"}
+          </p>
         </div>
       </div>
 

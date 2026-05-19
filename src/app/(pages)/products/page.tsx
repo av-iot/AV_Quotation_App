@@ -1,12 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { collection, query, orderBy, onSnapshot, deleteDoc, doc, updateDoc } from "firebase/firestore";
+import { collection, query, orderBy, onSnapshot, deleteDoc, doc, updateDoc, addDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { motion, AnimatePresence } from "framer-motion";
 import { useToast } from "@/hooks/use-toast";
 import type { Product, ProductType, InverterProduct, BatteryProduct, PanelProduct } from "@/types";
 import ProductFormDialog from "@/components/products/ProductFormDialog";
+import { useAuth } from "@/lib/auth-context";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -14,7 +15,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Plus, Search, MoreVertical, Pencil, Trash2, Loader2, Zap, Battery, Sun, Power } from "lucide-react";
+import { Plus, Search, MoreVertical, Pencil, Trash2, Loader2, Zap, Battery, Sun, Power, Database } from "lucide-react";
 
 const fmtRs = (n: number | string) => {
   const num = Number(n);
@@ -22,7 +23,9 @@ const fmtRs = (n: number | string) => {
 };
 
 export default function ProductsPage() {
+  const { user } = useAuth();
   const { toast } = useToast();
+  const isAdmin = user?.role && ["superadmin", "admin"].includes(user.role);
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -30,6 +33,7 @@ export default function ProductsPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Product | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [seeding, setSeeding] = useState(false);
 
   useEffect(() => {
     const q = query(collection(db, "products"), orderBy("brand"));
@@ -38,6 +42,224 @@ export default function ProductsPage() {
       setLoading(false);
     });
   }, []);
+
+  const handleSeedCatalog = async () => {
+    if (!isAdmin) return;
+    setSeeding(true);
+    try {
+      const realProducts = [
+        // Solis 10kW On-Grid Inverter
+        {
+          type: "inverter",
+          brand: "Solis",
+          model: "S5-GR3P10K",
+          origin: "China",
+          manufacture: "China",
+          warranty: 5,
+          qty: 15,
+          buy_price: "385000.00",
+          sell_price: "510000.00",
+          inverter_type: "ongrid",
+          phase_count: "Three Phase",
+          input_rated_power: 10000,
+          max_input_power: 15000,
+          max_input_voltage: 1100,
+          max_output_current: 16.7,
+          pv_string_count: 2,
+          mppt_count: 2,
+          active: true,
+        },
+        // GoodWe 5kW Hybrid Inverter
+        {
+          type: "inverter",
+          brand: "GoodWe",
+          model: "GW5000-ES-C10",
+          origin: "China",
+          manufacture: "China",
+          warranty: 5,
+          qty: 8,
+          buy_price: "410000.00",
+          sell_price: "545000.00",
+          inverter_type: "hybrid",
+          phase_count: "Single Phase",
+          input_rated_power: 5000,
+          max_input_power: 6500,
+          max_input_voltage: 600,
+          max_output_current: 22.7,
+          pv_string_count: 2,
+          mppt_count: 2,
+          battery_type: "LiFePO4",
+          output_power: 5000,
+          nominal_battery_voltage: 48,
+          no_of_battery_inputs: 1,
+          max_charging_power: 3000,
+          max_discharging_power: 3000,
+          battery_voltage_range: "44.8 - 57.6V",
+          active: true,
+        },
+        // Growatt 6kW On-Grid Inverter
+        {
+          type: "inverter",
+          brand: "Growatt",
+          model: "MIN 6000TL-X",
+          origin: "China",
+          manufacture: "China",
+          warranty: 5,
+          qty: 12,
+          buy_price: "220000.00",
+          sell_price: "290000.00",
+          inverter_type: "ongrid",
+          phase_count: "Single Phase",
+          input_rated_power: 6000,
+          max_input_power: 8100,
+          max_input_voltage: 550,
+          max_output_current: 27.2,
+          pv_string_count: 2,
+          mppt_count: 2,
+          active: true,
+        },
+        // Dyness Powerbox Battery
+        {
+          type: "battery",
+          brand: "Dyness",
+          model: "Powerbox F-10.0",
+          origin: "China",
+          manufacture: "China",
+          warranty: 10,
+          qty: 6,
+          buy_price: "790000.00",
+          sell_price: "1050000.00",
+          usable_energy: 9.6,
+          max_energy: 10.0,
+          cell_type: "LiFePO4",
+          nominal_voltage: 51.2,
+          min_battery_voltage: 44.8,
+          max_battery_voltage: 57.6,
+          cycle_count: 6000,
+          battery_model_type: "Wall-mounted",
+          active: true,
+        },
+        // Pylontech Battery
+        {
+          type: "battery",
+          brand: "Pylontech",
+          model: "US5000",
+          origin: "China",
+          manufacture: "China",
+          warranty: 10,
+          qty: 10,
+          buy_price: "380000.00",
+          sell_price: "495000.00",
+          usable_energy: 4.56,
+          max_energy: 4.8,
+          cell_type: "LiFePO4",
+          nominal_voltage: 48,
+          min_battery_voltage: 43.5,
+          max_battery_voltage: 54,
+          cycle_count: 6000,
+          battery_model_type: "Rack-mounted",
+          active: true,
+        },
+        // JinkoSolar 575W Panel
+        {
+          type: "panel",
+          brand: "JinkoSolar",
+          model: "Tiger Neo N-type 575W",
+          origin: "China",
+          manufacture: "China",
+          warranty: 12,
+          qty: 200,
+          buy_price: "42000.00",
+          sell_price: "55000.00",
+          max_panel_output_power: 575,
+          max_panel_output: 575,
+          panel_type: "Monocrystalline",
+          max_efficiency: 22.26,
+          max_power_voltage: 42.22,
+          width: 1134,
+          height: 2278,
+          length: 30,
+          active: true,
+        },
+        // JA Solar 550W Panel
+        {
+          type: "panel",
+          brand: "JA Solar",
+          model: "DeepBlue 3.0 550W",
+          origin: "China",
+          manufacture: "China",
+          warranty: 12,
+          qty: 150,
+          buy_price: "38000.00",
+          sell_price: "49500.00",
+          max_panel_output_power: 550,
+          max_panel_output: 550,
+          panel_type: "Monocrystalline",
+          max_efficiency: 21.3,
+          max_power_voltage: 41.97,
+          width: 1134,
+          height: 2279,
+          length: 35,
+          active: true,
+        },
+        // Trina Solar 430W Panel
+        {
+          type: "panel",
+          brand: "Trina Solar",
+          model: "Vertex S+ 430W",
+          origin: "China",
+          manufacture: "China",
+          warranty: 15,
+          qty: 300,
+          buy_price: "29000.00",
+          sell_price: "38000.00",
+          max_panel_output_power: 430,
+          max_panel_output: 430,
+          panel_type: "Monocrystalline",
+          max_efficiency: 21.5,
+          max_power_voltage: 43.0,
+          width: 1134,
+          height: 1762,
+          length: 30,
+          active: true,
+        }
+      ];
+
+      const now = new Date().toISOString();
+      let seededCount = 0;
+      for (const p of realProducts) {
+        const exists = products.some(existing => existing.model === p.model);
+        if (!exists) {
+          await addDoc(collection(db, "products"), {
+            ...p,
+            createdAt: now,
+            updatedAt: now
+          });
+          seededCount++;
+        }
+      }
+
+      if (seededCount > 0) {
+        toast({
+          title: "Database Seeded!",
+          description: `Successfully loaded ${seededCount} real-world products into your catalog.`
+        });
+      } else {
+        toast({
+          title: "Catalog Already Populated",
+          description: "All real-world models are already present in your catalog database."
+        });
+      }
+    } catch (err: any) {
+      toast({
+        title: "Seed Failed",
+        description: err.message,
+        variant: "destructive"
+      });
+    } finally {
+      setSeeding(false);
+    }
+  };
 
   const filtered = products.filter(
     (p) => p.type === activeTab &&
@@ -83,10 +305,23 @@ export default function ProductsPage() {
             <p className="text-sm text-muted-foreground">Manage inverters, batteries and panels</p>
           </div>
         </div>
-        <Button onClick={openAdd} className="gap-2 bg-primary hover:bg-primary/90">
-  <Plus className="h-4 w-4" />
-  Add product
-</Button>
+        {isAdmin && (
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              onClick={handleSeedCatalog}
+              disabled={seeding}
+              className="gap-2 border-primary/20 text-primary hover:bg-primary/5"
+            >
+              {seeding ? <Loader2 className="h-4 w-4 animate-spin" /> : <Database className="h-4 w-4" />}
+              Seed Real Catalog
+            </Button>
+            <Button onClick={openAdd} className="gap-2 bg-primary hover:bg-primary/90">
+              <Plus className="h-4 w-4" />
+              Add product
+            </Button>
+          </div>
+        )}
       </div>
 
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as ProductType)}>
@@ -120,9 +355,19 @@ export default function ProductsPage() {
                     <Loader2 className="h-5 w-5 animate-spin" /><span className="text-sm">Loading…</span>
                   </div>
                 ) : filtered.length === 0 ? (
-                  <div className="flex h-40 flex-col items-center justify-center gap-3">
+                  <div className="flex h-48 flex-col items-center justify-center gap-3 p-6 text-center">
                     <p className="text-sm text-muted-foreground">{search ? "No results." : `No ${tabVal}s added yet.`}</p>
-                    <Button size="sm" onClick={openAdd} className="gap-2"><Plus className="h-3.5 w-3.5" />Add first {tabVal}</Button>
+                    {isAdmin && (
+                      <div className="flex gap-2 flex-wrap justify-center">
+                        <Button size="sm" variant="outline" onClick={handleSeedCatalog} disabled={seeding} className="gap-2 border-primary/20 text-primary hover:bg-primary/5 h-8 text-xs">
+                          {seeding ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Database className="h-3.5 w-3.5" />}
+                          Seed Real-World Solar Catalog
+                        </Button>
+                        <Button size="sm" onClick={openAdd} className="gap-2 h-8 text-xs">
+                          <Plus className="h-3.5 w-3.5" />Add first {tabVal}
+                        </Button>
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <Table>
@@ -178,25 +423,34 @@ export default function ProductsPage() {
                                 <span className="text-xs text-muted-foreground">B: {fmtRs((p as any).buy_price)}</span>
                                 <span className="font-medium">S: {fmtRs((p as any).sell_price)}</span>
                               </div>
-                            </TableCell>                     <TableCell className="py-3">
-                              <button onClick={() => handleToggleActive(p)}>
-                                <Badge variant={p.active ? "default" : "secondary"} className="cursor-pointer text-xs">
-                                  {p.active ? "Active" : "Inactive"}
-                                </Badge>
-                              </button>
                             </TableCell>
                             <TableCell className="py-3">
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                  <Button variant="ghost" size="icon" className="h-7 w-7">
-                                    {deleting === p.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <MoreVertical className="h-3.5 w-3.5" />}
-                                  </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end">
-                                  <DropdownMenuItem onClick={() => openEdit(p)}><Pencil className="mr-2 h-3.5 w-3.5" />Edit</DropdownMenuItem>
-                                  <DropdownMenuItem onClick={() => handleDelete(p.id)} className="text-destructive focus:text-destructive"><Trash2 className="mr-2 h-3.5 w-3.5" />Delete</DropdownMenuItem>
-                                </DropdownMenuContent>
-                              </DropdownMenu>
+                              {isAdmin ? (
+                                <button onClick={() => handleToggleActive(p)}>
+                                  <Badge variant={p.active ? "default" : "secondary"} className="cursor-pointer text-xs">
+                                    {p.active ? "Active" : "Inactive"}
+                                  </Badge>
+                                </button>
+                              ) : (
+                                <Badge variant={p.active ? "default" : "secondary"} className="text-xs">
+                                  {p.active ? "Active" : "Inactive"}
+                                </Badge>
+                              )}
+                            </TableCell>
+                            <TableCell className="py-3">
+                              {isAdmin && (
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                    <Button variant="ghost" size="icon" className="h-7 w-7">
+                                      {deleting === p.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <MoreVertical className="h-3.5 w-3.5" />}
+                                    </Button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent align="end">
+                                    <DropdownMenuItem onClick={() => openEdit(p)}><Pencil className="mr-2 h-3.5 w-3.5" />Edit</DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => handleDelete(p.id)} className="text-destructive focus:text-destructive"><Trash2 className="mr-2 h-3.5 w-3.5" />Delete</DropdownMenuItem>
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
+                              )}
                             </TableCell>
                           </motion.tr>
                         ))}

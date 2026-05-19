@@ -112,7 +112,7 @@ export default function DashboardPage() {
       trend: calcTrend(currentQuotations.length, prevQuotations.length)
     },
     { 
-      label: "Revenue Pipeline", 
+      label: "Revenue", 
       value: `Rs. ${(currentRevenue / 1000000).toFixed(2)}M`, 
       icon: Banknote, 
       color: "bg-purple-50 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400",
@@ -130,6 +130,13 @@ export default function DashboardPage() {
     },
   ];
 
+  const canViewMoney = !user?.role || ["superadmin", "admin", "authorized", "stakeholder"].includes(user.role);
+  const canCRUD = user?.role && ["superadmin", "admin", "authorized"].includes(user.role);
+
+  const filteredStats = useMemo(() => {
+    return stats.filter(s => s.label !== "Revenue" || canViewMoney);
+  }, [stats, canViewMoney]);
+
   if (loading) {
     return <div className="p-8 animate-pulse text-muted-foreground">Loading dashboard...</div>;
   }
@@ -145,7 +152,7 @@ export default function DashboardPage() {
             {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
           </div>
           <h1 className="text-4xl font-black text-foreground tracking-tight mb-2">Good {getGreeting()}, {user?.displayName?.split(" ")[0] || "there"} 👋</h1>
-          <p className="text-base text-muted-foreground">Here is your solar sales pipeline overview.</p>
+          <p className="text-base text-muted-foreground">Here is your solar sales overview.</p>
         </div>
         
         <div className="flex flex-col sm:flex-row gap-3 relative z-10 w-full lg:w-auto">
@@ -167,19 +174,21 @@ export default function DashboardPage() {
                 Quotations
               </Link>
             </Button>
-            <Button asChild className="gap-2 h-10 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm border-0">
-              <Link href="/proposals/new">
-                <Plus className="h-4 w-4" />
-                New Proposal
-              </Link>
-            </Button>
+            {canCRUD && (
+              <Button asChild className="gap-2 h-10 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm border-0">
+                <Link href="/proposals/new">
+                  <Plus className="h-4 w-4" />
+                  New Proposal
+                </Link>
+              </Button>
+            )}
           </div>
         </div>
       </motion.div>
 
       {/* ── KPI Cards ── */}
-      <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-        {stats.map(({ label, value, icon: Icon, color, trend }, i) => (
+      <div className={`grid gap-6 sm:grid-cols-2 ${canViewMoney ? "lg:grid-cols-4" : "lg:grid-cols-3"}`}>
+        {filteredStats.map(({ label, value, icon: Icon, color, trend }, i) => (
           <motion.div key={label} {...fadeUp(i * 0.1)}>
             <Card className="border-border shadow-sm bg-card overflow-hidden group">
               <CardContent className="p-6">
@@ -296,9 +305,11 @@ export default function DashboardPage() {
                         </div>
                       </div>
                       <div className="text-right">
-                        <p className="text-sm font-black text-foreground group-hover:text-emerald-500 transition-colors">
-                          Rs. {(q.total || 0).toLocaleString("en-US")}
-                        </p>
+                        {canViewMoney && (
+                          <p className="text-sm font-black text-foreground group-hover:text-emerald-500 transition-colors">
+                            Rs. {(q.total || 0).toLocaleString("en-US")}
+                          </p>
+                        )}
                         <p className="text-[10px] text-muted-foreground font-bold uppercase mt-0.5 tracking-wider">{q.paymentStatus}</p>
                       </div>
                     </motion.li>

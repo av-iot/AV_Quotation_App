@@ -13,17 +13,28 @@ import {
 } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 
+const isProduction = process.env.NODE_ENV === "production";
+
 const firebaseConfig = {
-  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || "",
-  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || "",
-  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || "",
-  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || "",
-  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || "",
-  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID || "",
+  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || (isProduction ? "" : "AIzaSyDummyKeyForLocalDevelopment12345"),
+  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || (isProduction ? "" : "dummy-app.firebaseapp.com"),
+  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || (isProduction ? "" : "dummy-project"),
+  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || (isProduction ? "" : "dummy-project.appspot.com"),
+  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || (isProduction ? "" : "1234567890"),
+  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID || (isProduction ? "" : "1:1234567890:web:1234567890abcdef"),
 };
 
-if (!firebaseConfig.apiKey && typeof window !== 'undefined') {
-  console.error("Firebase API Key is missing! Make sure to set NEXT_PUBLIC_FIREBASE_API_KEY in your deployment environment variables.");
+if (!firebaseConfig.apiKey) {
+  const errMsg = "FATAL ERROR: Firebase configuration environment variables are not set! " +
+                 "Please configure NEXT_PUBLIC_FIREBASE_API_KEY in your environment.";
+  if (typeof window !== 'undefined') {
+    console.error(errMsg);
+  }
+  throw new Error(errMsg);
+}
+
+if (!process.env.NEXT_PUBLIC_FIREBASE_API_KEY && typeof window !== 'undefined') {
+  console.warn("Firebase API Key is missing! Using local sandbox dummy keys.");
 }
 
 const app = getApps().length ? getApp() : initializeApp(firebaseConfig);

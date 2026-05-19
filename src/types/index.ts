@@ -1,11 +1,12 @@
-// ─── Auth ────────────────────────────────────────────────────────────────────
+export type UserRole = "superadmin" | "admin" | "authorized" | "stakeholder" | "viewer" | "engineer";
+
 export interface AppUser {
   uid: string;
   email: string;
   displayName: string | null;
   photoURL: string | null;
   source: "myiot" | "google";
-  role: "admin" | "engineer" | "viewer";
+  role: UserRole;
 }
 
 // ─── Products / catalog ──────────────────────────────────────────────────────
@@ -109,12 +110,16 @@ export interface ComponentSpec {
   origin: string;
   manufacture: string;
   productId?: string;
+  dataSheetUrl?: string;
+  dataSheetName?: string;
 }
 
 export interface OptionPricing {
   estOutput: string;      // e.g. "500 - 600"
   sysPrice: number;
   structPrice?: number;
+  installPrice?: number;
+  discount?: number;
   totalPrice: number;
   specialStructNote: boolean;
 }
@@ -125,6 +130,11 @@ export interface ProposalOption {
   inverter: ComponentSpec;
   battery?: ComponentSpec;
   pricing: OptionPricing;
+  expectedGen?: string;
+  afterSalesPeriod?: string;
+  servicesPerYear?: string;
+  hasShading?: boolean;
+  shadingReduction?: string;
 }
 
 // ─── Proposal ────────────────────────────────────────────────────────────────
@@ -170,6 +180,8 @@ export interface CustomerInfo {
   updatedAt: string;
   docxUrl?: string;
   pdfUrl?: string;
+  cebCharges?: number;
+  validityPeriod?: string;
 }
 
 // ─── Quotation (confirmed order) ─────────────────────────────────────────────
