@@ -202,20 +202,23 @@ export default function ProposalWizard({ initialData, proposalId }: ProposalWiza
         const { db } = await import("@/lib/firebase");
         const { buildProposalFromForm } = await import("@/lib/proposal-builder");
 
-        const proposal = buildProposalFromForm(
+        const proposal: any = buildProposalFromForm(
           values,
-          user?.uid || "dev_user",
+          initialData?.createdBy || user?.uid || "dev_user",
           getProductsMapFromCache()
         );
-        // Retain original QtnNo and PropNo
+        // Retain original audit fields
         proposal.qtnNo = initialData?.qtnNo || values.qtnNo;
         if (initialData?.propNo) proposal.propNo = initialData.propNo;
+        if (initialData?.createdAt) proposal.createdAt = initialData.createdAt;
+        if (initialData?.createdBy) proposal.createdBy = initialData.createdBy;
 
         const docRef = doc(db, "proposals", proposalId);
         await updateDoc(docRef, {
           ...proposal,
           status: status as any,
           updatedAt: serverTimestamp(),
+          updatedBy: user?.uid || "dev_user",
         });
 
         // Log proposal update action

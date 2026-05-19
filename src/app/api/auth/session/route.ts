@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { adminAuth } from "@/lib/firebase-admin";
+import { adminAuth, adminDb } from "@/lib/firebase-admin";
 import { cookies } from "next/headers";
 import { logActivityServer } from "@/lib/audit-logger-server";
 
@@ -11,6 +11,45 @@ export async function POST(req: NextRequest) {
   try {
     // Verify and decode
     const decoded = await adminAuth().verifyIdToken(idToken);
+
+    // Secure server-side user check & initialization to prevent privilege escalation
+    const userDocRef = adminDb().collection("users").doc(decoded.uid);
+    const userSnap = await userDocRef.get();
+
+    const isSuperAdminEmail =
+      decoded.email === "admin@altavision.lk" ||
+      decoded.email === "dev@altavision.lk" ||
+      decoded.email === "devopsaltavision@gmail.com" ||
+      decoded.email === process.env.NEXT_PUBLIC_SUPER_ADMIN_EMAIL;
+
+    let userRole = "viewer";
+    const VALID_ROLES = ["superadmin", "admin", "authorized", "stakeholder", "viewer", "engineer"];
+
+    if (userSnap.exists) {
+      const userData = userSnap.data() || {};
+      userRole = userData.role || "viewer";
+      if (!VALID_ROLES.includes(userRole)) {
+        userRole = "viewer";
+      }
+
+      // Force superadmin role only on the server if designated superadmin email
+      if (isSuperAdminEmail && userRole !== "superadmin") {
+        userRole = "superadmin";
+        await userDocRef.set({ role: "superadmin" }, { merge: true });
+      }
+    } else {
+      userRole = isSuperAdminEmail ? "superadmin" : "viewer";
+      await userDocRef.set({
+        uid: decoded.uid,
+        email: decoded.email || "",
+        displayName: decoded.name || decoded.displayName || null,
+        photoURL: decoded.picture || null,
+        source: "google",
+        role: userRole,
+        createdAt: new Date().toISOString(),
+        lastSeen: new Date().toISOString(),
+      });
+    }
 
     // Create a 5-day session cookie
     const expiresIn = 60 * 60 * 24 * 5 * 1000;

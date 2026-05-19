@@ -35,6 +35,7 @@ const ROLE_CONFIG: Record<UserRole, { label: string; desc: string; variant: "def
   authorized: { label: "Authorized User", desc: "Can create & CRUD proposals/quotations", variant: "secondary" },
   stakeholder: { label: "Stakeholder", desc: "Read-only view with financial data access", variant: "outline" },
   viewer: { label: "Normal User (Default)", desc: "Read-only access, see & download PDFs", variant: "secondary" },
+  engineer: { label: "Engineer (Legacy)", desc: "Technical system builder and operator permissions", variant: "secondary" },
 };
 
 export default function UsersPage() {
@@ -260,6 +261,7 @@ export default function UsersPage() {
                                 u.role === "admin" && "bg-blue-500/5 border-blue-500/20 text-blue-600",
                                 u.role === "authorized" && "bg-emerald-500/5 border-emerald-500/20 text-emerald-600",
                                 u.role === "stakeholder" && "bg-purple-500/5 border-purple-500/20 text-purple-600",
+                                u.role === "engineer" && "bg-orange-500/5 border-orange-500/20 text-orange-600",
                                 u.role === "viewer" && "bg-muted/40 border-border text-muted-foreground"
                               )}>
                                 <SelectValue placeholder="Select role" />

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useMemo, useRef } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useParams } from "next/navigation";
 import Script from "next/script";
 import { doc, getDoc, collection, getDocs, addDoc, query, where, serverTimestamp } from "firebase/firestore";
@@ -144,6 +144,10 @@ function PDFDocumentPages({
           const viewport = page.getViewport({ scale: 2.0 });
           const canvas = document.createElement("canvas");
           const context = canvas.getContext("2d");
+          if (!context) {
+            console.error("Failed to get 2D canvas context for PDF rendering");
+            continue;
+          }
           canvas.width = viewport.width;
           canvas.height = viewport.height;
           canvas.className = "max-w-full max-h-[230mm] object-contain mx-auto my-auto shadow-sm rounded-md";
@@ -409,7 +413,7 @@ export default function PrintProposalPage() {
     });
 
     // 2. Product Datasheets
-    const opt = proposal?.options?.[0];
+    const opt = proposal?.options?.[selectedIdx] || proposal?.options?.[0];
     if (opt) {
       if (opt.inverter?.dataSheetUrl) {
         const isPdf = opt.inverter.dataSheetUrl.toLowerCase().includes(".pdf") || !opt.inverter.dataSheetUrl.toLowerCase().match(/\.(jpg|jpeg|png|webp|gif|svg)/);
@@ -437,7 +441,7 @@ export default function PrintProposalPage() {
       }
     }
     return list;
-  }, [folderPdfs, proposal]);
+  }, [folderPdfs, proposal, selectedIdx]);
 
   const attachmentStartPages = useMemo(() => {
     const starts: Record<string, number> = {};
@@ -501,34 +505,38 @@ export default function PrintProposalPage() {
           // Trigger print immediately for 100% responsive, zero-delay print dialog popup
           window.print();
 
-          // Write versioned print record & logs asynchronously in background
-          try {
-            await addDoc(collection(db, "pdf_prints"), {
-              proposalId: id,
-              qtnNo: proposal.qtnNo,
-              propNo: proposal.propNo || "",
-              version: printVersion,
-              printedBy: user?.uid || "dev_user",
-              printedByEmail: user?.email || "dev@altavision.lk",
-              printedByName: user?.displayName || "Dev User",
-              timestamp: serverTimestamp(),
-            });
+          // Write versioned print record & logs asynchronously in background if authenticated
+          if (user) {
+            try {
+              await addDoc(collection(db, "pdf_prints"), {
+                proposalId: id,
+                qtnNo: proposal.qtnNo,
+                propNo: proposal.propNo || "",
+                version: printVersion,
+                printedBy: user.uid,
+                printedByEmail: user.email,
+                printedByName: user.displayName || user.email || "User",
+                timestamp: serverTimestamp(),
+              });
 
-            // Increment local printVersion count for subsequently opened prints in the same session
-            setPrintVersion(prev => prev + 1);
+              // Increment local printVersion count for subsequently opened prints in the same session
+              setPrintVersion(prev => prev + 1);
 
-            const { logActivityClient } = await import("@/lib/audit-logger-client");
-            await logActivityClient(user, "PDF_GENERATE", {
-              proposalId: id,
-              qtnNo: proposal.qtnNo,
-              propNo: proposal.propNo || "",
-              customerName: proposal.customer.name,
-              type: "proposal",
-              version: printVersion,
-              manualClick: true,
-            });
-          } catch (e) {
-            console.error("Proposal print log failed:", e);
+              const { logActivityClient } = await import("@/lib/audit-logger-client");
+              await logActivityClient(user, "PDF_GENERATE", {
+                proposalId: id,
+                qtnNo: proposal.qtnNo,
+                propNo: proposal.propNo || "",
+                customerName: proposal.customer.name,
+                type: "proposal",
+                version: printVersion,
+                manualClick: true,
+              });
+            } catch (e) {
+              console.error("Proposal print log failed:", e);
+            }
+          } else {
+            console.warn("Skipping print logging: user is not authenticated.");
           }
         }} className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm font-semibold">
           <Printer className="h-4 w-4" />
