@@ -6,6 +6,7 @@ import {
   Document,
   Paragraph,
   TextRun,
+  ExternalHyperlink,
   Table,
   TableRow,
   TableCell,
@@ -15,7 +16,7 @@ import {
   Packer
 } from "docx";
 
-export async function POST(
+export async function GET(
   req: NextRequest,
   props: { params: Promise<{ id: string }> }
 ) {
@@ -45,6 +46,39 @@ export async function POST(
 
   try {
     const db = adminDb();
+    
+    // Check Letter Expiry
+    const settingsSnap = await db.collection("settings").doc("engineers").get();
+    if (settingsSnap.exists) {
+      const s = settingsSnap.data();
+      const expiredList: string[] = [];
+      const today = new Date();
+      
+      if (s?.letters && Array.isArray(s.letters)) {
+        s.letters.forEach((letObj: any) => {
+          if (letObj.noExpiry) return;
+          if (!letObj.expiryDate) return;
+          const expiryDate = new Date(letObj.expiryDate);
+          expiryDate.setHours(23, 59, 59, 999);
+          if (today > expiryDate) {
+            expiredList.push(`${letObj.name || letObj.fileName || "Unnamed Letter"} (Expired: ${letObj.expiryDate})`);
+          }
+        });
+      } else if (s?.letterExpiryDate) {
+        const expiryDate = new Date(s.letterExpiryDate);
+        expiryDate.setHours(23, 59, 59, 999);
+        if (today > expiryDate) {
+          expiredList.push(`Authorization Letters (Expired: ${s.letterExpiryDate})`);
+        }
+      }
+      
+      if (expiredList.length > 0) {
+        return NextResponse.json({ 
+          error: `The following authorization letters have expired: ${expiredList.join(", ")}. Proposal generation is locked.` 
+        }, { status: 403 });
+      }
+    }
+
     const docRef = db.collection("proposals").doc(id);
     const docSnap = await docRef.get();
     
@@ -253,6 +287,20 @@ export async function POST(
             new TextRun({
               text: `${opt.panel.qty}x ${opt.panel.brand} ${opt.panel.model} (${opt.panel.ratingLabel}) — ${opt.panel.warranty} warranty`,
             }),
+            ...(opt.panel.dataSheetUrl ? [
+              new TextRun({ text: " [" }),
+              new ExternalHyperlink({
+                children: [
+                  new TextRun({
+                    text: opt.panel.dataSheetName || "View Datasheet",
+                    color: "0000FF",
+                    underline: {},
+                  }),
+                ],
+                link: opt.panel.dataSheetUrl,
+              }),
+              new TextRun({ text: "]" })
+            ] : []),
           ],
         })
       );
@@ -265,6 +313,20 @@ export async function POST(
             new TextRun({
               text: `${opt.inverter.qty}x ${opt.inverter.brand} ${opt.inverter.model} (${opt.inverter.ratingLabel}) — ${opt.inverter.warranty} warranty`,
             }),
+            ...(opt.inverter.dataSheetUrl ? [
+              new TextRun({ text: " [" }),
+              new ExternalHyperlink({
+                children: [
+                  new TextRun({
+                    text: opt.inverter.dataSheetName || "View Datasheet",
+                    color: "0000FF",
+                    underline: {},
+                  }),
+                ],
+                link: opt.inverter.dataSheetUrl,
+              }),
+              new TextRun({ text: "]" })
+            ] : []),
           ],
         })
       );
@@ -278,10 +340,27 @@ export async function POST(
               new TextRun({
                 text: `${opt.battery.qty}x ${opt.battery.brand} ${opt.battery.model} (${opt.battery.ratingLabel}) — ${opt.battery.warranty} warranty`,
               }),
+              ...(opt.battery.dataSheetUrl ? [
+                new TextRun({ text: " [" }),
+                new ExternalHyperlink({
+                  children: [
+                    new TextRun({
+                      text: opt.battery.dataSheetName || "View Datasheet",
+                      color: "0000FF",
+                      underline: {},
+                    }),
+                  ],
+                  link: opt.battery.dataSheetUrl,
+                }),
+                new TextRun({ text: "]" })
+              ] : []),
             ],
           })
         );
       }
+
+      const calculatedTotal = (opt.pricing.sysPrice || 0) + (opt.pricing.structPrice || 0) + (opt.pricing.installPrice || 0) + (proposal.cebCharges || 0) - (opt.pricing.discount || 0);
+      const systemTotal = calculatedTotal > 0 ? calculatedTotal : (opt.pricing.totalPrice || 0);
 
       // Pricing
       children.push(
@@ -289,7 +368,7 @@ export async function POST(
           children: [
             new TextRun({ text: "Total Investment: ", bold: true }),
             new TextRun({
-              text: `Rs. ${opt.pricing.totalPrice.toLocaleString("en-US", {
+              text: `Rs. ${systemTotal.toLocaleString("en-US", {
                 minimumFractionDigits: 2,
               })}`,
               bold: true,
@@ -371,26 +450,6 @@ export async function POST(
 
     const docxBuffer = await Packer.toBuffer(doc);
 
-    // Upload to Firebase Storage
-    const bucket = adminStorage().bucket();
-    const filePath = `proposals/${id}.docx`;
-    const storageFile = bucket.file(filePath);
-
-    await storageFile.save(docxBuffer, {
-      metadata: {
-        contentType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-      },
-    });
-
-    // Generate reliable public download URL
-    const docxUrl = `https://firebasestorage.googleapis.com/v0/b/${process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET}/o/${encodeURIComponent(filePath)}?alt=media`;
-
-    // Update proposal docxUrl in Firestore
-    await docRef.update({
-      docxUrl,
-      updatedAt: FieldValue.serverTimestamp(),
-    });
-
     // Log background DOCX generation activity
     await logActivityServer(
       decoded.uid,
@@ -402,12 +461,18 @@ export async function POST(
         qtnNo: proposal.qtnNo,
         propNo: proposal.propNo || "",
         customerName: proposal.customer.name,
-        docxUrl,
+        action: "Direct Download",
       },
       req
     );
 
-    return NextResponse.json({ ok: true, docxUrl });
+    return new NextResponse(docxBuffer as any, {
+      status: 200,
+      headers: {
+        "Content-Type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "Content-Disposition": `attachment; filename="${proposal.propNo || proposal.qtnNo}.docx"`,
+      },
+    });
   } catch (err: any) {
     console.error("DOCX generation error:", err.message);
     return NextResponse.json({ error: err.message }, { status: 500 });

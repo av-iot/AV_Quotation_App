@@ -2,6 +2,20 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ─── Leaflet Map ────────────────────────────────────────────────────── */
+.leaflet-container { font-family: inherit; z-index: 0; }
+.leaflet-tooltip {
+  background: hsl(var(--card)) !important;
+  border: 1px solid hsl(var(--border)) !important;
+  color: hsl(var(--foreground)) !important;
+  box-shadow: 0 4px 12px rgba(0,0,0,.15) !important;
+  border-radius: 8px !important;
+  padding: 6px 10px !important;
+}
+.leaflet-tooltip-top::before { border-top-color: hsl(var(--border)) !important; }
+.leaflet-control-zoom a { background: hsl(var(--card)) !important; color: hsl(var(--foreground)) !important; border-color: hsl(var(--border)) !important; }
+.leaflet-control-attribution { background: hsl(var(--background)/0.8) !important; color: hsl(var(--muted-foreground)) !important; font-size: 9px !important; }
+
 @layer base {
   :root {
     --background: 0 0% 100%;
@@ -92,11 +106,97 @@
   @apply bg-primary/60;
 }
 
+/* ─── Force Light Theme (White Mode) Override ────────────────────── */
+.theme-force-light,
+html.dark .theme-force-light,
+.dark .theme-force-light {
+  --background: 0 0% 100% !important;
+  --foreground: 222.2 84% 4.9% !important;
+  --card: 0 0% 100% !important;
+  --card-foreground: 222.2 84% 4.9% !important;
+  --popover: 0 0% 100% !important;
+  --popover-foreground: 222.2 84% 4.9% !important;
+  --primary: 142 71% 28% !important;          /* #1a6e3a — Alta Vision green */
+  --primary-foreground: 0 0% 100% !important;
+  --secondary: 210 40% 96.1% !important;
+  --secondary-foreground: 222.2 47.4% 11.2% !important;
+  --muted: 210 40% 96.1% !important;
+  --muted-foreground: 215.4 16.3% 46.9% !important;
+  --accent: 142 55% 92% !important;           /* light green tint */
+  --accent-foreground: 142 71% 20% !important;
+  --destructive: 0 84.2% 60.2% !important;
+  --destructive-foreground: 0 0% 98% !important;
+  --border: 214.3 31.8% 91.4% !important;
+  --input: 214.3 31.8% 91.4% !important;
+  --ring: 142 71% 28% !important;
+  --av-green: #1a6e3a !important;
+  --av-green-light: #d5e8d4 !important;
+  --av-green-dark: #0f4424 !important;
+  color: hsl(222.2 84% 4.9%) !important;
+}
+
+/* ─── Hide Google Translate toolbar ──────────────────────────────── */
+.goog-te-banner-frame,
+.goog-te-banner-frame.skiptranslate,
+.skiptranslate[style*="display: block"],
+iframe.skiptranslate {
+  display: none !important;
+  height: 0 !important;
+  visibility: hidden !important;
+}
+body {
+  top: 0 !important;
+  position: static !important;
+}
+body.translated-ltr,
+body.translated-rtl {
+  top: 0 !important;
+  margin-top: 0 !important;
+}
+.VIpgJd-ZVi9od-l4eHX-hSRGPd,
+#goog-gt-tt,
+.goog-te-ftab-float,
+.goog-te-menu-frame,
+#goog-gt-votingbuttons,
+.goog-te-balloon-frame {
+  display: none !important;
+  visibility: hidden !important;
+  height: 0 !important;
+  width: 0 !important;
+  overflow: hidden !important;
+}
+
 /* ─── Print Styles ────────────────────────────────────────────────── */
 @media print {
   body {
     background: white !important;
     color: black !important;
+  }
+
+  /* Force light theme CSS variables on root and dark selectors in print */
+  :root, .dark, html.dark {
+    --background: 0 0% 100% !important;
+    --foreground: 222.2 84% 4.9% !important;
+    --card: 0 0% 100% !important;
+    --card-foreground: 222.2 84% 4.9% !important;
+    --popover: 0 0% 100% !important;
+    --popover-foreground: 222.2 84% 4.9% !important;
+    --primary: 142 71% 28% !important;
+    --primary-foreground: 0 0% 100% !important;
+    --secondary: 210 40% 96.1% !important;
+    --secondary-foreground: 222.2 47.4% 11.2% !important;
+    --muted: 210 40% 96.1% !important;
+    --muted-foreground: 215.4 16.3% 46.9% !important;
+    --accent: 142 55% 92% !important;
+    --accent-foreground: 142 71% 20% !important;
+    --destructive: 0 84.2% 60.2% !important;
+    --destructive-foreground: 0 0% 98% !important;
+    --border: 214.3 31.8% 91.4% !important;
+    --input: 214.3 31.8% 91.4% !important;
+    --ring: 142 71% 28% !important;
+    --av-green: #1a6e3a !important;
+    --av-green-light: #d5e8d4 !important;
+    --av-green-dark: #0f4424 !important;
   }
 
   .print\:hidden {
@@ -129,7 +229,7 @@
   }
 
   .qtn-a4-body {
-    padding: 2mm 4mm !important;
+    padding: 4mm 6mm !important;
     height: 100% !important;
     box-sizing: border-box !important;
     overflow: hidden !important;
@@ -181,10 +281,41 @@
     margin-top: 3px !important;
   }
 
-  /* Slightly smaller body text to save vertical space */
+  /* Slightly larger body text for print readability */
   .qtn-a4-body [class*="text-xs"] {
-    font-size: 9.5px !important;
-    line-height: 1.35 !important;
+    font-size: 11.5px !important;
+    line-height: 1.4 !important;
+  }
+  
+  .qtn-a4-body .text-\[9px\] {
+    font-size: 10px !important;
+  }
+
+  .qtn-a4-body .text-\[10px\] {
+    font-size: 11.5px !important;
+  }
+
+  .qtn-a4-body .text-\[8px\] {
+    font-size: 9px !important;
+  }
+
+  /* Reset backgrounds for printing to save ink */
+  .qtn-a4-body .bg-muted {
+    background-color: white !important;
+    background: white !important;
+    border: 1px solid #e2e8f0 !important;
+  }
+  
+  .qtn-a4-body .bg-zinc-50\/40,
+  .qtn-a4-body .bg-zinc-50,
+  .qtn-a4-body [class*="bg-zinc-50"],
+  .qtn-a4-body [class*="bg-gradient-to-r"],
+  .qtn-a4-body .bg-primary\/5,
+  .qtn-a4-body [class*="bg-primary/"],
+  .qtn-a4-body [class*="bg-emerald-"] {
+    background-color: transparent !important;
+    background-image: none !important;
+    background: transparent !important;
   }
 
   /* Reduce heights of all footer logos slightly to prevent overflow */

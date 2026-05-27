@@ -16,7 +16,7 @@ import { getStorage } from "firebase/storage";
 const isProduction = process.env.NODE_ENV === "production";
 
 const firebaseConfig = {
-  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || (isProduction ? "" : "AIzaSyDummyKeyForLocalDevelopment12345"),
+  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || (isProduction ? "" : "dummy-firebase-api-key"),
   authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || (isProduction ? "" : "dummy-app.firebaseapp.com"),
   projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || (isProduction ? "" : "dummy-project"),
   storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || (isProduction ? "" : "dummy-project.appspot.com"),

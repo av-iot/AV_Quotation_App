@@ -5,7 +5,7 @@ export function buildProposalFromForm(
   userId: string,
   productsMap: Map<string, any>
 ): Omit<Proposal, "id" | "createdAt" | "updatedAt"> {
-  const qtnNo = form.qtnNo || `QTN_${Date.now().toString().slice(-5)}`;
+  const qtnNo = form.qtnNo || `P_Inv_${Date.now().toString().slice(-5)}`;
 
   const options: ProposalOption[] = form.options
     .slice(0, form.numOptions)
@@ -21,6 +21,7 @@ export function buildProposalFromForm(
         origin: panelData?.origin || "China",
         manufacture: panelData?.manufacture || "China",
         productId: opt.panelProductId,
+        productSubtype: panelData?.panel_type || "",
         dataSheetUrl: panelData?.dataSheetUrl || "",
         dataSheetName: panelData?.dataSheetName || "",
       };
@@ -36,6 +37,7 @@ export function buildProposalFromForm(
         origin: invData?.origin || "China",
         manufacture: invData?.manufacture || "China",
         productId: opt.inverterProductId,
+        productSubtype: invData?.inverter_type || "",
         dataSheetUrl: invData?.dataSheetUrl || "",
         dataSheetName: invData?.dataSheetName || "",
       };
@@ -76,6 +78,8 @@ export function buildProposalFromForm(
           discount: Number(opt.discount) || 0,
           totalPrice: Number(opt.totalPrice || opt.sysPrice) || 0,
           specialStructNote: opt.specialStructNote || false,
+          includeStructInTotal: opt.includeStructInTotal !== false,
+          includeInstallInTotal: opt.includeInstallInTotal !== false,
         },
       };
     });
@@ -90,6 +94,7 @@ export function buildProposalFromForm(
       ...(form.phone2 ? { phone2: form.phone2 } : {}),
       email: form.email,
       sendFormat: form.sendFormat || [],
+      ...(form.custSalutation ? { salutation: form.custSalutation } : {}),
     },
     sysType: form.sysType,
     utility: form.utility,
@@ -105,6 +110,9 @@ export function buildProposalFromForm(
     pay3: form.pay3 || "0",
     extraNotes: form.extraNotes || "",
     cebCharges: form.cebCharges ? Number(form.cebCharges) : 0,
+    cebInclusive: form.cebInclusive !== false,
+    vatInvoice: form.vatInvoice || false,
+    vatRate: form.vatRate ? Number(form.vatRate) : 18,
     validityPeriod: form.validityPeriod || "14",
     status: "draft",
     createdBy: userId,

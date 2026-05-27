@@ -50,14 +50,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (fbUser) {
         setFirebaseUser(fbUser);
         
+        let userRole: any = "viewer";
         // Wait for session to be set before setting user state to prevent premature redirects
         try {
           const idToken = await fbUser.getIdToken();
+          
+          // Use 10-second timeout to prevent indefinite hanging on slow connection
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 10000);
+          
           const res = await fetch("/api/auth/session", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ idToken }),
+            signal: controller.signal,
           });
+          clearTimeout(timeoutId);
           
           if (!res.ok) {
             const data = await res.json().catch(() => ({}));
@@ -68,6 +76,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             setLoading(false);
             return;
           }
+
+          const data = await res.json().catch(() => ({}));
+          userRole = data.role || "viewer";
         } catch (err) {
           console.error("Error setting session:", err);
           await signOut();
@@ -77,28 +88,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           return;
         }
 
-        // Fetch user role from Firestore (read-only, secure backend handles writes)
-        let userRole: any = "viewer";
-        try {
-          const { doc, getDoc } = await import("firebase/firestore");
-          const userDocRef = doc(db, "users", fbUser.uid);
-          const userSnap = await getDoc(userDocRef);
-
-          if (userSnap.exists()) {
-            const userData = userSnap.data();
-            userRole = userData.role || "viewer";
-          }
-        } catch (dbErr) {
-          console.error("Failed to read user role from database, falling back:", dbErr);
-          const isSuperAdminEmail =
-            fbUser.email === "admin@altavision.lk" ||
-            fbUser.email === "dev@altavision.lk" ||
-            fbUser.email === "devopsaltavision@gmail.com" ||
-            fbUser.email === process.env.NEXT_PUBLIC_SUPER_ADMIN_EMAIL;
-          userRole = isSuperAdminEmail ? "superadmin" : "viewer";
-        }
-
-        const VALID_ROLES = ["superadmin", "admin", "authorized", "stakeholder", "viewer", "engineer"];
+        const VALID_ROLES = ["superadmin", "admin", "authorized", "stakeholder", "viewer", "engineer", "site_engineer", "team_leader", "technician"];
         if (!VALID_ROLES.includes(userRole)) {
           userRole = "viewer";
         }
@@ -114,9 +104,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       } else {
         setFirebaseUser(null);
         setUser(null);
-        try {
-          await fetch("/api/auth/session", { method: "DELETE" });
-        } catch (err) {}
+        // Do not await cookie deletion to prevent blocking client load
+        fetch("/api/auth/session", { method: "DELETE" }).catch(() => {});
       }
       // Always runs — loading will never get stuck
       setLoading(false);

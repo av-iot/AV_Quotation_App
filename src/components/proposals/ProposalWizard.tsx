@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useRouter } from "next/navigation";
 import { useForm, FormProvider } from "react-hook-form";
@@ -16,7 +16,7 @@ import StepReview from "./steps/StepReviewImpl";
 
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import { ArrowLeft, ArrowRight, Loader2, FileText } from "lucide-react";
+import { ArrowLeft, ArrowRight, Loader2, FileText, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const STEPS = [
@@ -45,10 +45,13 @@ const defaultOption = {
   discount: "",
   totalPrice: "",
   specialStructNote: false,
+  includeStructInTotal: false,
+  includeInstallInTotal: false,
 };
 
 const defaultValues: ProposalFormData = {
   custName: "",
+  custSalutation: "",
   qtnNo: "",
   addr: "",
   phone: "",
@@ -72,6 +75,9 @@ const defaultValues: ProposalFormData = {
   pay3: "10",
   extraNotes: "",
   cebCharges: "",
+  cebInclusive: true,
+  vatInvoice: false,
+  vatRate: "18",
   validityPeriod: "14",
 };
 
@@ -93,12 +99,59 @@ interface ProposalWizardProps {
 }
 
 export default function ProposalWizard({ initialData, proposalId }: ProposalWizardProps = {}) {
+  const [localProposalId, setLocalProposalId] = useState<string | undefined>(proposalId);
   const [step, setStep] = useState(1);
   const [direction, setDirection] = useState(1);
   const [saving, setSaving] = useState(false);
+  const [isExpired, setIsExpired] = useState(false);
+  const [expiredLetters, setExpiredLetters] = useState<Array<{ name: string; expiryDate: string }>>([]);
+  const [expiryLoading, setExpiryLoading] = useState(true);
   const { user, firebaseUser } = useAuth();
   const { toast } = useToast();
   const router = useRouter();
+
+  useEffect(() => {
+    async function checkExpiry() {
+      try {
+        const { doc, getDoc } = await import("firebase/firestore");
+        const { db } = await import("@/lib/firebase");
+        const snap = await getDoc(doc(db, "settings", "engineers"));
+        if (snap.exists()) {
+          const data = snap.data();
+          const expiredList: Array<{ name: string; expiryDate: string }> = [];
+          const today = new Date();
+          
+          if (data.letters && Array.isArray(data.letters)) {
+            data.letters.forEach((letObj: any) => {
+              if (letObj.noExpiry) return;
+              if (!letObj.expiryDate) return;
+              const expiryDate = new Date(letObj.expiryDate);
+              expiryDate.setHours(23, 59, 59, 999);
+              if (today > expiryDate) {
+                expiredList.push({ name: letObj.name || letObj.fileName || "Unnamed Letter", expiryDate: letObj.expiryDate });
+              }
+            });
+          } else if (data.letterExpiryDate) {
+            const expiryDate = new Date(data.letterExpiryDate);
+            expiryDate.setHours(23, 59, 59, 999);
+            if (today > expiryDate) {
+              expiredList.push({ name: "Authorization Letters", expiryDate: data.letterExpiryDate });
+            }
+          }
+          
+          if (expiredList.length > 0) {
+            setExpiredLetters(expiredList);
+            setIsExpired(true);
+          }
+        }
+      } catch (err) {
+        console.error("Failed to check expiry", err);
+      } finally {
+        setExpiryLoading(false);
+      }
+    }
+    checkExpiry();
+  }, []);
 
   const mapProposalToFormData = (p: any): ProposalFormData => {
     const mapOption = (opt: any) => ({
@@ -119,6 +172,8 @@ export default function ProposalWizard({ initialData, proposalId }: ProposalWiza
       discount: opt.pricing?.discount ? String(opt.pricing.discount) : "",
       totalPrice: opt.pricing?.totalPrice ? String(opt.pricing.totalPrice) : "",
       specialStructNote: opt.pricing?.specialStructNote || false,
+      includeStructInTotal: opt.pricing?.includeStructInTotal !== false,
+      includeInstallInTotal: opt.pricing?.includeInstallInTotal !== false,
       expectedGen: opt.expectedGen ? String(opt.expectedGen) : "",
       afterSalesPeriod: opt.afterSalesPeriod ? String(opt.afterSalesPeriod) : "",
       servicesPerYear: opt.servicesPerYear ? String(opt.servicesPerYear) : "",
@@ -128,6 +183,7 @@ export default function ProposalWizard({ initialData, proposalId }: ProposalWiza
 
     return {
       custName: p.customer?.name || "",
+      custSalutation: p.customer?.salutation || "",
       qtnNo: p.qtnNo || "",
       addr: p.customer?.address || "",
       phone: p.customer?.phone || "",
@@ -151,6 +207,9 @@ export default function ProposalWizard({ initialData, proposalId }: ProposalWiza
       pay3: p.pay3 || "10",
       extraNotes: p.extraNotes || "",
       cebCharges: p.cebCharges ? String(p.cebCharges) : "",
+      cebInclusive: p.cebInclusive !== false,
+      vatInvoice: p.vatInvoice || false,
+      vatRate: p.vatRate ? String(p.vatRate) : "18",
       validityPeriod: p.validityPeriod ? String(p.validityPeriod) : "14",
     };
   };
@@ -162,10 +221,49 @@ export default function ProposalWizard({ initialData, proposalId }: ProposalWiza
     mode: "onChange",
   });
 
-  const goNext = useCallback(() => {
+  const goNext = async () => {
+    let fieldsToValidate: any[] = [];
+    if (step === 1) {
+      fieldsToValidate = ["custName", "addr", "phone", "phone2", "email", "sendFormat"];
+    } else if (step === 2) {
+      fieldsToValidate = ["utility", "phase", "cutoutCurrent", "mountType", "roofType", "powerScheme"];
+    } else if (step === 3) {
+      fieldsToValidate = ["monthlyUsage"];
+      const numOpts = methods.getValues("numOptions") || 1;
+      for (let i = 0; i < numOpts; i++) {
+        fieldsToValidate.push(`options.${i}.inverterProductId`);
+        fieldsToValidate.push(`options.${i}.inverterQty`);
+        fieldsToValidate.push(`options.${i}.panelProductId`);
+        fieldsToValidate.push(`options.${i}.panelQty`);
+        fieldsToValidate.push(`options.${i}.batteryProductId`);
+        fieldsToValidate.push(`options.${i}.batteryQty`);
+      }
+    } else if (step === 4) {
+      const cebInclusiveVal = methods.watch("cebInclusive");
+      fieldsToValidate = ["pay1", "pay2", "pay3", "validityPeriod"];
+      if (cebInclusiveVal === false) {
+        fieldsToValidate.push("cebCharges");
+      }
+      const numOpts = methods.getValues("numOptions") || 1;
+      for (let i = 0; i < numOpts; i++) {
+        fieldsToValidate.push(`options.${i}.sysPrice`);
+      }
+    }
+
+    const isValid = await methods.trigger(fieldsToValidate);
+    if (!isValid) {
+      toast({
+        title: "Validation Error",
+        description: "Please check all required fields and correct any errors before proceeding.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    await handleSave("draft", false);
     setDirection(1);
     setStep((s) => Math.min(s + 1, 5));
-  }, []);
+  };
 
   const goBack = useCallback(() => {
     setDirection(-1);
@@ -190,13 +288,26 @@ export default function ProposalWizard({ initialData, proposalId }: ProposalWiza
     return productsMap;
   }, []);
 
-  const handleSave = async (status: "draft" | "sent") => {
+  const handleSave = async (status: "draft" | "sent", redirect: boolean = true) => {
     if (!firebaseUser && !user) return;
+
+    if (status === "sent") {
+      const isValid = await methods.trigger();
+      if (!isValid) {
+        toast({
+          title: "Validation Error",
+          description: "Please fix all validation errors before generating the proposal.",
+          variant: "destructive",
+        });
+        return;
+      }
+    }
+
     setSaving(true);
     try {
       const values = methods.getValues();
 
-      if (proposalId) {
+      if (localProposalId) {
         // Edit Mode: update the existing proposal document directly in Firestore
         const { doc, updateDoc, serverTimestamp } = await import("firebase/firestore");
         const { db } = await import("@/lib/firebase");
@@ -208,12 +319,12 @@ export default function ProposalWizard({ initialData, proposalId }: ProposalWiza
           getProductsMapFromCache()
         );
         // Retain original audit fields
-        proposal.qtnNo = initialData?.qtnNo || values.qtnNo;
+        proposal.qtnNo = initialData?.qtnNo || values.qtnNo || `QTN_${Date.now().toString().slice(-5)}`;
         if (initialData?.propNo) proposal.propNo = initialData.propNo;
         if (initialData?.createdAt) proposal.createdAt = initialData.createdAt;
         if (initialData?.createdBy) proposal.createdBy = initialData.createdBy;
 
-        const docRef = doc(db, "proposals", proposalId);
+        const docRef = doc(db, "proposals", localProposalId);
         await updateDoc(docRef, {
           ...proposal,
           status: status as any,
@@ -224,29 +335,20 @@ export default function ProposalWizard({ initialData, proposalId }: ProposalWiza
         // Log proposal update action
         const { logActivityClient } = await import("@/lib/audit-logger-client");
         await logActivityClient(user, "PROPOSAL_UPDATE", {
-          proposalId,
+          proposalId: localProposalId,
           qtnNo: proposal.qtnNo,
           customerName: proposal.customer.name,
           sysType: proposal.sysType,
           status,
         });
 
-        // Fire-and-forget: re-generate docx in background for the updated proposal
-        if (status === "sent") {
-          const idToken = firebaseUser ? await firebaseUser.getIdToken() : null;
-          fetch(`${process.env.NEXT_PUBLIC_BASE_URL}/api/proposals/${proposalId}/generate`, {
-            method: "POST",
-            headers: {
-              ...(idToken ? { Authorization: `Bearer ${idToken}` } : {}),
-            },
-          }).catch(console.error);
+        if (redirect) {
+          toast({
+            title: "Proposal Updated",
+            description: `Successfully updated Reference: ${proposal.propNo || proposal.qtnNo}`,
+          });
+          router.push(`/proposals/${localProposalId}`);
         }
-
-        toast({
-          title: "Proposal Updated",
-          description: `Successfully updated Reference: ${proposal.qtnNo}`,
-        });
-        router.push(`/proposals/${proposalId}`);
         return;
       }
 
@@ -266,11 +368,14 @@ export default function ProposalWizard({ initialData, proposalId }: ProposalWiza
           const { data, error } = await res.json();
           if (!error) {
             serverSuccess = true;
-            toast({
-              title: status === "draft" ? "Saved as draft" : "Proposal sent",
-              description: `Reference: ${data.qtnNo}`,
-            });
-            router.push(`/proposals/${data.id}`);
+            setLocalProposalId(data.id);
+            if (redirect) {
+              toast({
+                title: status === "draft" ? "Saved as draft" : "Proposal sent",
+                description: `Reference: ${data.qtnNo}`,
+              });
+              router.push(`/proposals/${data.id}`);
+            }
             return;
           }
         }
@@ -313,12 +418,16 @@ export default function ProposalWizard({ initialData, proposalId }: ProposalWiza
 
         // Queue for server sync when back online
         await enqueue("create_proposal", { ...values, status }, docRef.id);
+        
+        setLocalProposalId(docRef.id);
 
-        toast({
-          title: "Saved offline",
-          description: `Ref: ${tempQtnNo} — will sync when online`,
-        });
-        router.push(`/proposals/${docRef.id}`);
+        if (redirect) {
+          toast({
+            title: "Saved offline",
+            description: `Ref: ${tempQtnNo} — will sync when online`,
+          });
+          router.push(`/proposals/${docRef.id}`);
+        }
       }
     } catch (err: any) {
       toast({
@@ -333,6 +442,44 @@ export default function ProposalWizard({ initialData, proposalId }: ProposalWiza
 
   const stepComponents = [StepCustomer, StepSite, StepComponents, StepPricing, StepReview];
   const StepComponent = stepComponents[step - 1];
+
+  if (expiryLoading) {
+    return (
+      <div className="flex h-[60vh] flex-col items-center justify-center gap-2 text-muted-foreground p-6">
+        <Loader2 className="h-10 w-10 animate-spin text-emerald-500 mb-2" />
+        <p className="text-sm font-semibold">Checking authorization letters...</p>
+      </div>
+    );
+  }
+
+  if (isExpired && !proposalId) {
+    return (
+      <div className="mx-auto max-w-2xl px-4 py-16 text-center space-y-6">
+        <div className="flex justify-center">
+          <div className="h-20 w-20 bg-destructive/10 text-destructive rounded-full flex items-center justify-center">
+            <AlertTriangle className="h-10 w-10" />
+          </div>
+        </div>
+        <h1 className="text-2xl font-black text-slate-800 tracking-tight">Authorization Letters Expired</h1>
+        <div className="text-muted-foreground font-medium max-w-lg mx-auto space-y-2 text-sm text-left bg-slate-50 border border-slate-200 p-4 rounded-xl">
+          <p className="font-semibold text-slate-700 text-center">The following attached letters have passed their expiry date:</p>
+          <ul className="list-disc pl-5 space-y-1 mt-2 text-xs">
+            {expiredLetters.map((l, i) => (
+              <li key={i} className="text-red-650 font-medium">
+                {l.name} <span className="font-bold text-slate-500">(Expired: {l.expiryDate})</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+        <div className="bg-amber-50 border border-amber-200 text-amber-800 p-4 rounded-xl text-sm max-w-lg mx-auto">
+          Please contact a system administrator to update the authorization PDFs in the system and update the expiry dates in the Settings page to resume proposal generation.
+        </div>
+        <Button variant="outline" className="mt-4" onClick={() => router.push("/proposals")}>
+          <ArrowLeft className="h-4 w-4 mr-2" /> Back to Proposals
+        </Button>
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-8">
@@ -408,29 +555,22 @@ export default function ProposalWizard({ initialData, proposalId }: ProposalWiza
             {step === 5 ? (
               <>
                 <Button
-                  variant="outline"
-                  onClick={() => handleSave("draft")}
-                  disabled={saving}
-                  className="gap-2"
-                >
-                  {saving && <Loader2 className="h-4 w-4 animate-spin" />}
-                  Save draft
-                </Button>
-                <Button
-                  onClick={() => handleSave("sent")}
+                  onClick={() => handleSave("sent", true)}
                   disabled={saving}
                   className="gap-2 bg-primary hover:bg-primary/90"
                 >
                   {saving && <Loader2 className="h-4 w-4 animate-spin" />}
-                  Save & Generate
+                  Generate Proposal
                   <ArrowRight className="h-4 w-4" />
                 </Button>
               </>
             ) : (
               <Button
                 onClick={goNext}
+                disabled={saving}
                 className="gap-2 bg-primary hover:bg-primary/90"
               >
+                {saving && <Loader2 className="h-4 w-4 animate-spin" />}
                 Next
                 <ArrowRight className="h-4 w-4" />
               </Button>

@@ -1,12 +1,14 @@
 "use client";
 
-import { useFormContext } from "react-hook-form";
+import { useEffect } from "react";
+import { useFormContext, Controller } from "react-hook-form";
 import type { ProposalFormData } from "@/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { FormItem, FormLabel, FormControl, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { User } from "lucide-react";
 import { motion } from "framer-motion";
 
@@ -19,7 +21,13 @@ const fadeUp = {
 };
 
 export default function StepCustomer({ onNext }: { onNext: () => void }) {
-  const { register, watch, setValue, formState: { errors } } = useFormContext<ProposalFormData>();
+  const { register, watch, setValue, control, formState: { errors } } = useFormContext<ProposalFormData>();
+
+  useEffect(() => {
+    register("sendFormat", {
+      validate: (val) => (val && val.length > 0) || "At least one sending format must be selected",
+    });
+  }, [register]);
 
   return (
     <motion.div variants={stagger} initial="initial" animate="animate">
@@ -33,21 +41,47 @@ export default function StepCustomer({ onNext }: { onNext: () => void }) {
         <CardContent>
           <div className="grid gap-4 sm:grid-cols-2">
 
-            {/* Full name */}
+            {/* Title + Full name */}
             <motion.div variants={fadeUp} className="sm:col-span-2">
               <FormItem>
                 <FormLabel>Full name / company *</FormLabel>
-                <FormControl>
+                {/* Unified bordered container with green left accent — matching Address field style */}
+                <div className="flex items-stretch rounded-md border border-input bg-background ring-offset-background focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 overflow-hidden border-l-[3px] border-l-emerald-500">
+                  {/* Title / Salutation Select */}
+                  <Controller
+                    name="custSalutation"
+                    control={control}
+                    defaultValue=""
+                    render={({ field }) => (
+                      <Select value={field.value ?? ""} onValueChange={field.onChange}>
+                        <SelectTrigger className="w-[100px] shrink-0 font-semibold border-0 border-r border-input rounded-none shadow-none focus:ring-0 focus:ring-offset-0 bg-muted/30 text-foreground">
+                          <SelectValue placeholder="Title" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">— None —</SelectItem>
+                          <SelectItem value="Mr.">Mr.</SelectItem>
+                          <SelectItem value="Miss.">Miss.</SelectItem>
+                          <SelectItem value="Mrs.">Mrs.</SelectItem>
+                          <SelectItem value="Ven.">Ven.</SelectItem>
+                          <SelectItem value="Dr.">Dr.</SelectItem>
+                          <SelectItem value="Hon.">Hon.</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    )}
+                  />
+                  {/* Full Name Input — borderless inside container */}
                   <Input
                     {...register("custName", { required: "Name is required" })}
-                    placeholder="Mr. K. W. Athukorala"
+                    placeholder="K. W. Athukorala"
+                    className="flex-1 border-0 shadow-none rounded-none focus-visible:ring-0 focus-visible:ring-offset-0 bg-transparent"
                   />
-                </FormControl>
+                </div>
                 {errors.custName && (
-                  <FormMessage>{errors.custName.message}</FormMessage>
+                  <p className="text-sm font-medium text-destructive mt-1.5">{errors.custName.message}</p>
                 )}
               </FormItem>
             </motion.div>
+
 
             {/* Address — single textarea */}
             <motion.div variants={fadeUp} className="sm:col-span-2">
@@ -56,13 +90,13 @@ export default function StepCustomer({ onNext }: { onNext: () => void }) {
                 <FormControl>
                   <Textarea
                     {...register("addr", { required: "Address is required" })}
-                    placeholder="17, 3rd Lane, Pitakotte, Colombo"
-                    rows={2}
+                    placeholder={"No. 17,\n3rd Lane,\nPitakotte,\nColombo"}
+                    rows={4}
                     className="resize-none"
                   />
                 </FormControl>
                 {errors.addr && (
-                  <FormMessage>{errors.addr.message}</FormMessage>
+                  <p className="text-sm font-medium text-destructive mt-1.5">{errors.addr.message}</p>
                 )}
               </FormItem>
             </motion.div>
@@ -73,13 +107,22 @@ export default function StepCustomer({ onNext }: { onNext: () => void }) {
                 <FormLabel>Phone number (whatsapp if available) *</FormLabel>
                 <FormControl>
                   <Input
-                    {...register("phone", { required: "Phone number is required" })}
+                    {...register("phone", {
+                      required: "Phone number is required",
+                      validate: (val) => {
+                        const clean = val.replace(/[\s\-\(\)]/g, "");
+                        return (
+                          /^(?:0|94|\+94)?\d{9}$/.test(clean) ||
+                          "Invalid phone number (must be a 10-digit number like 0771234567)"
+                        );
+                      }
+                    })}
                     placeholder="077 208 3894"
                     type="tel"
                   />
                 </FormControl>
                 {errors.phone && (
-                  <FormMessage>{errors.phone.message}</FormMessage>
+                  <p className="text-sm font-medium text-destructive mt-1.5">{errors.phone.message}</p>
                 )}
               </FormItem>
             </motion.div>
@@ -95,11 +138,23 @@ export default function StepCustomer({ onNext }: { onNext: () => void }) {
                 </FormLabel>
                 <FormControl>
                   <Input
-                    {...register("phone2")}
+                    {...register("phone2", {
+                      validate: (val) => {
+                        if (!val) return true;
+                        const clean = val.replace(/[\s\-\(\)]/g, "");
+                        return (
+                          /^(?:0|94|\+94)?\d{9}$/.test(clean) ||
+                          "Invalid phone number (must be a 10-digit number like 0113601100)"
+                        );
+                      }
+                    })}
                     placeholder="011 360 1100"
                     type="tel"
                   />
                 </FormControl>
+                {errors.phone2 && (
+                  <p className="text-sm font-medium text-destructive mt-1.5">{errors.phone2.message}</p>
+                )}
               </FormItem>
             </motion.div>
 
@@ -110,17 +165,14 @@ export default function StepCustomer({ onNext }: { onNext: () => void }) {
                 <FormControl>
                   <Input
                     {...register("email", {
-                      pattern: {
-                        value: /^[^@]+@[^@]+\.[^@]+$/,
-                        message: "Invalid email address",
-                      },
+                      validate: (val) => !val || /^[^@]+@[^@]+\.[^@]+$/.test(val) || "Invalid email address"
                     })}
                     type="email"
                     placeholder="client@email.com"
                   />
                 </FormControl>
                 {errors.email && (
-                  <FormMessage>{errors.email.message}</FormMessage>
+                  <p className="text-sm font-medium text-destructive mt-1.5">{errors.email.message}</p>
                 )}
               </FormItem>
             </motion.div>
@@ -140,11 +192,13 @@ export default function StepCustomer({ onNext }: { onNext: () => void }) {
                       checked={(watch("sendFormat") || []).includes(format.id)}
                       onCheckedChange={(checked) => {
                         const current = watch("sendFormat") || [];
+                        let nextVal;
                         if (checked) {
-                          setValue("sendFormat", [...current, format.id]);
+                          nextVal = [...current, format.id];
                         } else {
-                          setValue("sendFormat", current.filter((f) => f !== format.id));
+                          nextVal = current.filter((f) => f !== format.id);
                         }
+                        setValue("sendFormat", nextVal, { shouldValidate: true });
                       }}
                     />
                     <label
@@ -156,6 +210,9 @@ export default function StepCustomer({ onNext }: { onNext: () => void }) {
                   </div>
                 ))}
               </div>
+              {errors.sendFormat && (
+                <p className="text-sm font-medium text-destructive mt-2">{errors.sendFormat.message}</p>
+              )}
             </motion.div>
 
           </div>

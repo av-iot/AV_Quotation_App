@@ -1,58 +1,158 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Helper function to check if the current user has superadmin role
+
+    // ─── Role helpers ─────────────────────────────────────────────────────────
+    // NOTE: Each helper performs a Firestore read against /users/{uid}.
+    // Firebase caches this read per request, so it does not count extra reads
+    // for rules that call multiple helpers on the same request.
+
+    function userRole() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
+    }
+
     function isSuperAdmin() {
-      return request.auth != null && 
-             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'superadmin';
+      return request.auth != null && userRole() == 'superadmin';
     }
 
-    // Helper function to check if the current user has admin / superadmin role
+    // Admin or higher
     function isAdmin() {
-      return request.auth != null && 
-             (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'superadmin' ||
-              get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin');
+      return request.auth != null && userRole() in ['superadmin', 'admin'];
     }
 
-    // Rules for users collection
+    // Authorized staff or higher (can create/edit proposals, invoices, receipts)
+    function isAuthorized() {
+      return request.auth != null && userRole() in ['superadmin', 'admin', 'authorized'];
+    }
+
+    // Engineer or higher (can manage services/projects)
+    function isEngineer() {
+      return request.auth != null && userRole() in ['superadmin', 'admin', 'authorized', 'engineer'];
+    }
+
+    // Any authenticated user
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // ─── Users ────────────────────────────────────────────────────────────────
     match /users/{userId} {
-      // Allow get for own profile, list only for superadmins
-      allow get: if request.auth != null && (request.auth.uid == userId || isSuperAdmin());
-      allow list: if isSuperAdmin();
-      
-      // Creating user profile (e.g. self-registration)
-      // Gated to standard default 'viewer' role to prevent self-privilege escalation.
-      allow create: if request.auth != null && 
-                    request.auth.uid == userId && 
-                    request.resource.data.role == 'viewer';
-      
-      // Updating user profile: 
-      // Users can update their profile information, but only superadmins can mutate user roles.
-      allow update: if request.auth != null && (
-        isSuperAdmin() || 
-        (request.auth.uid == userId && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role']))
+      // Anyone can read their own profile; superadmins, admins, and authorized users can read any
+      allow get: if isSignedIn() && (request.auth.uid == userId || isAuthorized());
+      // Only authorized, admins, and superadmins can list all users
+      allow list: if isAuthorized();
+      // Self-registration is allowed, but role must default to 'viewer' to prevent privilege escalation
+      allow create: if isSignedIn()
+                    && request.auth.uid == userId
+                    && request.resource.data.role == 'viewer';
+      // Users can update their own profile except the role field;
+      // authorized, admin, and superadmin users can change roles
+      allow update: if isSignedIn() && (
+        isAuthorized() ||
+        (request.auth.uid == userId &&
+         !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role']))
       );
+      allow delete: if isAuthorized();
     }
 
-    // Rules for proposals collection
+    // ─── Proposals ────────────────────────────────────────────────────────────
     match /proposals/{proposalId} {
-      allow read: if request.auth != null;
-      allow create, update: if request.auth != null && 
-                            (isSuperAdmin() || isAdmin() || 
-                             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'authorized');
+      allow get: if true;
+      allow list: if isSignedIn();
+      allow create, update: if isAuthorized();
       allow delete: if isSuperAdmin();
     }
 
-    // Rules for products collection
-    match /products/{productId} {
-      allow read: if request.auth != null;
-      allow write: if isSuperAdmin() || isAdmin();
+    // ─── Quotations (invoices) ────────────────────────────────────────────────
+    match /quotations/{quotationId} {
+      allow read: if true; // Public read needed for sharing proposal links that list quotations
+      allow create, update: if isAuthorized();
+      allow delete: if isSuperAdmin();
     }
 
-    // Rules for pdf_prints collection
+    // ─── Receipts ─────────────────────────────────────────────────────────────
+    match /receipts/{receiptId} {
+      allow read: if true; // Public read needed for shared links
+      allow create, update: if isAuthorized();
+      allow delete: if isSuperAdmin();
+    }
+
+    // ─── Projects ─────────────────────────────────────────────────────────────
+    match /projects/{projectId} {
+      allow read: if isSignedIn();
+      // Engineers and above can update project status/stages
+      allow create, update: if isEngineer();
+      allow delete: if isSuperAdmin();
+    }
+
+    // ─── Services ─────────────────────────────────────────────────────────────
+    match /services/{serviceId} {
+      allow get: if true;
+      allow list: if isSignedIn();
+      allow create, update: if isEngineer();
+      allow delete: if isAdmin();
+    }
+
+    // ─── Service Plans (Routes) ───────────────────────────────────────────────
+    match /servicePlans/{planId} {
+      allow get: if true;
+      allow list: if isSignedIn();
+      allow create: if isEngineer();
+      // team_leader and site_engineer must be able to update site statuses during service
+      allow update: if isSignedIn() && userRole() in ['superadmin', 'admin', 'authorized', 'engineer', 'site_engineer', 'team_leader'];
+      allow delete: if isAdmin();
+    }
+
+    // ─── Service Checklists ───────────────────────────────────────────────────
+    match /service_checklists/{checklistId} {
+      allow read: if isSignedIn();
+      // Any field service role can create / update checklists (submit & approve)
+      allow create, update: if isSignedIn() && userRole() in ['superadmin', 'admin', 'authorized', 'engineer', 'site_engineer', 'team_leader'];
+      allow delete: if isAdmin();
+    }
+
+    // ─── Service Invoices ─────────────────────────────────────────────────────
+    match /serviceInvoices/{invoiceId} {
+      allow get: if true;
+      allow list: if isSignedIn();
+      allow create, update: if isEngineer();
+      allow delete: if isAdmin();
+    }
+
+    // ─── Invoice follow-ups ───────────────────────────────────────────────────
+    match /invoice_followups/{followupId} {
+      allow read: if isSignedIn();
+      allow create, update: if isAuthorized();
+      allow delete: if isAdmin();
+    }
+
+    // ─── Products catalog ─────────────────────────────────────────────────────
+    match /products/{productId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // ─── Settings (engineers, banks, addresses, letters, etc.) ───────────────
+    match /settings/{settingId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // ─── Audit / activity logs ────────────────────────────────────────────────
+    match /audit_logs/{logId} {
+      // Only admins can read logs
+      allow read: if isAdmin();
+      // Any authenticated user can create log entries (server-side writes are preferred)
+      allow create: if isSignedIn();
+      // Only superadmins can mutate or purge logs
+      allow update, delete: if isSuperAdmin();
+    }
+
+    // ─── PDF print records ────────────────────────────────────────────────────
     match /pdf_prints/{printId} {
-      allow read: if request.auth != null;
-      allow create: if request.auth != null && request.resource.data.printedBy == request.auth.uid;
+      allow read: if true; // Public read to determine versioning on shared links
+      // Users can only create records attributed to themselves
+      allow create: if isSignedIn() && request.resource.data.printedBy == request.auth.uid;
       allow update, delete: if isSuperAdmin();
     }
   }
