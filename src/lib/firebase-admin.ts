@@ -51,6 +51,10 @@ export async function createCustomTokenFromMyIot(
     const uid = `myiot_${payload.sub}`;
     const email = payload.email as string;
 
+    // Validate role against whitelist to prevent privilege escalation
+    const VALID_ROLES = ["engineer", "site_engineer", "team_leader", "technician"];
+    const safeRole = VALID_ROLES.includes(payload.role as string) ? (payload.role as string) : "engineer";
+
     // Store/update user profile in Firestore
     await adminDb()
       .collection("users")
@@ -61,7 +65,8 @@ export async function createCustomTokenFromMyIot(
           email,
           displayName: payload.name || email,
           source: "myiot",
-          role: (payload.role as string) || "engineer",
+          role: safeRole,
+          approved: true, // myiot users are pre-approved
           lastSeen: new Date().toISOString(),
         },
         { merge: true }
@@ -70,7 +75,7 @@ export async function createCustomTokenFromMyIot(
     const customToken = await adminAuth().createCustomToken(uid, {
       email,
       source: "myiot",
-      role: payload.role || "engineer",
+      role: safeRole,
     });
 
     return customToken;

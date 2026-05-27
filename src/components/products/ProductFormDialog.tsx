@@ -3,8 +3,7 @@
 import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { collection, addDoc, updateDoc, doc } from "firebase/firestore";
-import { db, storage } from "@/lib/firebase";
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { db } from "@/lib/firebase";
 import { useAuth } from "@/lib/auth-context";
 import { useToast } from "@/hooks/use-toast";
 import type { InverterProduct, BatteryProduct, PanelProduct, ProductType, InverterType } from "@/types";
@@ -25,8 +24,8 @@ interface Props {
   editing?: AnyProduct | null;
 }
 
-function Field({ label, required, children, hint, col2 }: {
-  label: string; required?: boolean; children: React.ReactNode; hint?: string; col2?: boolean;
+function Field({ label, required, children, hint, col2, error }: {
+  label: string; required?: boolean; children: React.ReactNode; hint?: string; col2?: boolean; error?: string;
 }) {
   return (
     <div className={cn("flex flex-col gap-1.5", col2 && "col-span-2")}>
@@ -34,6 +33,7 @@ function Field({ label, required, children, hint, col2 }: {
         {label}{required && <span className="ml-0.5 text-destructive">*</span>}
       </Label>
       {children}
+      {error && <p className="text-xs font-medium text-destructive mt-0.5">{error}</p>}
       {hint && <p className="text-xs text-muted-foreground">{hint}</p>}
     </div>
   );
@@ -126,37 +126,11 @@ export default function ProductFormDialog({ open, onClose, editing }: Props) {
     setInverterType("ongrid");
   };
 
-  const { register, handleSubmit, reset, setValue, watch } = useForm<any>({
+  const { register, handleSubmit, reset, setValue, watch, formState: { errors } } = useForm<any>({
     defaultValues: editing || {},
   });
 
-  const [uploadingFile, setUploadingFile] = useState(false);
   const watchDataSheetUrl = watch("dataSheetUrl");
-  const watchDataSheetName = watch("dataSheetName");
-
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setUploadingFile(true);
-    try {
-      const storageRef = ref(storage, `datasheets/${productType}/${Date.now()}_${file.name}`);
-      const snapshot = await uploadBytes(storageRef, file);
-      const downloadUrl = await getDownloadURL(snapshot.ref);
-      setValue("dataSheetUrl", downloadUrl, { shouldDirty: true });
-      setValue("dataSheetName", file.name, { shouldDirty: true });
-      toast({ title: "Datasheet uploaded successfully!" });
-    } catch (err: any) {
-      console.error(err);
-      toast({
-        title: "Upload failed",
-        description: err.message,
-        variant: "destructive",
-      });
-    } finally {
-      setUploadingFile(false);
-    }
-  };
-
 useEffect(() => {
     if (open) {
       reset(editing || {});
@@ -179,6 +153,8 @@ useEffect(() => {
       const now = new Date().toISOString();
       const payload = {
         ...data,
+        dataSheetUrl: watchDataSheetUrl || null,
+        dataSheetName: watchDataSheetUrl ? `${data.brand || 'Item'} ${data.model || ''}`.trim() + ` Data Sheet.pdf` : null,
         type: productType,
         active: data.active !== false,
         updatedAt: now,
@@ -250,27 +226,34 @@ useEffect(() => {
 
     <Section title="General" />
 
-            <Field label="Brand" required>
-              <Input {...register("brand", { required: true })} placeholder="GoodWe" className="h-9 text-sm" />
+            <Field label="Item Name" required error={errors.brand?.message as string}>
+              <Input {...register("brand", { required: "Item Name is required" })} placeholder="GoodWe" className="h-9 text-sm" />
             </Field>
-            <Field label="Model" required>
-              <Input {...register("model", { required: true })} placeholder="GW5000-ES-C10" className="h-9 text-sm" />
+            <Field label="Model" required error={errors.model?.message as string}>
+              <Input {...register("model", { required: "Model is required" })} placeholder="GW5000-ES-C10" className="h-9 text-sm" />
             </Field>
-            <Field label="Country of origin" required>
-              <Input {...register("origin", { required: true })} placeholder="China" className="h-9 text-sm" />
+            <Field label="Country of origin" required error={errors.origin?.message as string}>
+              <Input {...register("origin", { required: "Country of origin is required" })} placeholder="China" className="h-9 text-sm" />
             </Field>
-            <Field label="Country of manufacture" required>
-              <Input {...register("manufacture", { required: true })} placeholder="China" className="h-9 text-sm" />
+            <Field label="Country of manufacture" required error={errors.manufacture?.message as string}>
+              <Input {...register("manufacture", { required: "Country of manufacture is required" })} placeholder="China" className="h-9 text-sm" />
             </Field>
-            <Field label="Warranty (Years)" required>
-              <Input {...register("warranty", { required: true })} type="number" placeholder="5" className="h-9 text-sm" />
+            <Field label="Warranty (Years)" required error={errors.warranty?.message as string}>
+              <Input {...register("warranty", { 
+                required: "Warranty is required",
+                min: { value: 0, message: "Warranty cannot be negative" }
+              })} type="number" placeholder="5" className="h-9 text-sm" />
             </Field>
-            <Field label="Inventory / Batch Qty">
-              <Input {...register("qty", { required: false })} type="number" placeholder="1" className="h-9 text-sm" />
+            <Field label="Inventory / Batch Qty" error={errors.qty?.message as string}>
+              <Input {...register("qty", { 
+                min: { value: 0, message: "Qty cannot be negative" }
+              })} type="number" placeholder="1" className="h-9 text-sm" />
             </Field>
-            <Field label="Buy price (LKR)">
+            <Field label="Buy price (LKR)" error={errors.buy_price?.message as string}>
               <Input 
-                {...register("buy_price", { required: false })} 
+                {...register("buy_price", { 
+                  min: { value: 0, message: "Buy price cannot be negative" }
+                })} 
                 type="number" 
                 step="any" 
                 placeholder="0" 
@@ -280,12 +263,15 @@ useEffect(() => {
                   setValue("buy_price", val);
                   const num = Number(val) || 0;
                   const sell = num * 1.205 * 1.10;
-                  setValue("sell_price", sell.toFixed(2), { shouldDirty: true });
+                  setValue("sell_price", sell.toFixed(2), { shouldDirty: true, shouldValidate: true });
                 }}
               />
             </Field>
-            <Field label="Sell price (LKR)" required>
-              <Input {...register("sell_price", { required: true })} type="number" step="any" placeholder="0" className="h-9 text-sm" />
+            <Field label="Sell price (LKR)" required error={errors.sell_price?.message as string}>
+              <Input {...register("sell_price", { 
+                required: "Sell price is required",
+                min: { value: 0, message: "Sell price cannot be negative" }
+              })} type="number" step="any" placeholder="0" className="h-9 text-sm" />
             </Field>
 
             {/* ── INVERTER FIELDS ── */}
@@ -293,8 +279,8 @@ useEffect(() => {
               <>
                 <Section title="Inverter specs" />
 
-                <Field label="Inverter type" required>
-                  <Select value={inverterType} onValueChange={(v) => { setInverterType(v as InverterType); setValue("inverter_type", v); }}>
+                <Field label="Inverter type" required error={errors.inverter_type?.message as string}>
+                  <Select value={inverterType} onValueChange={(v) => { setInverterType(v as InverterType); setValue("inverter_type", v, { shouldValidate: true }); }}>
                     <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="ongrid">On-Grid</SelectItem>
@@ -304,10 +290,10 @@ useEffect(() => {
                   </Select>
                 </Field>
 
-                <Field label="Phase" required>
+                <Field label="Phase" required error={errors.phase_count?.message as string}>
                   <Select
                     defaultValue={(editing as InverterProduct)?.phase_count || "Single Phase"}
-                    onValueChange={(v) => setValue("phase_count", v)}
+                    onValueChange={(v) => setValue("phase_count", v, { shouldValidate: true })}
                   >
                     <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
                     <SelectContent>
@@ -317,23 +303,41 @@ useEffect(() => {
                   </Select>
                 </Field>
 
-                <Field label="Input rated power (W)" required>
-                  <Input {...register("input_rated_power", { required: true })} type="number" step="any" placeholder="5000" className="h-9 text-sm" />
+                <Field label="Input rated power (W)" required error={errors.input_rated_power?.message as string}>
+                  <Input {...register("input_rated_power", { 
+                    required: "Input rated power is required",
+                    min: { value: 0, message: "Cannot be negative" }
+                  })} type="number" step="any" placeholder="5000" className="h-9 text-sm" />
                 </Field>
-                <Field label="Max input power (W)" required>
-                  <Input {...register("max_input_power", { required: true })} type="number" step="any" placeholder="6500" className="h-9 text-sm" />
+                <Field label="Max input power (W)" required error={errors.max_input_power?.message as string}>
+                  <Input {...register("max_input_power", { 
+                    required: "Max input power is required",
+                    min: { value: 0, message: "Cannot be negative" }
+                  })} type="number" step="any" placeholder="6500" className="h-9 text-sm" />
                 </Field>
-                <Field label="Max input voltage (V)" required>
-                  <Input {...register("max_input_voltage", { required: true })} type="number" step="any" placeholder="600" className="h-9 text-sm" />
+                <Field label="Max input voltage (V)" required error={errors.max_input_voltage?.message as string}>
+                  <Input {...register("max_input_voltage", { 
+                    required: "Max input voltage is required",
+                    min: { value: 0, message: "Cannot be negative" }
+                  })} type="number" step="any" placeholder="600" className="h-9 text-sm" />
                 </Field>
-                <Field label="Max output current (A)" required>
-                  <Input {...register("max_output_current", { required: true })} type="number" step="any" placeholder="22.7" className="h-9 text-sm" />
+                <Field label="Max output current (A)" required error={errors.max_output_current?.message as string}>
+                  <Input {...register("max_output_current", { 
+                    required: "Max output current is required",
+                    min: { value: 0, message: "Cannot be negative" }
+                  })} type="number" step="any" placeholder="22.7" className="h-9 text-sm" />
                 </Field>
-                <Field label="PV string count" required>
-                  <Input {...register("pv_string_count", { required: true })} type="number" placeholder="2" className="h-9 text-sm" />
+                <Field label="PV string count" required error={errors.pv_string_count?.message as string}>
+                  <Input {...register("pv_string_count", { 
+                    required: "PV string count is required",
+                    min: { value: 0, message: "Cannot be negative" }
+                  })} type="number" placeholder="2" className="h-9 text-sm" />
                 </Field>
-                <Field label="MPPT count" required>
-                  <Input {...register("mppt_count", { required: true })} type="number" placeholder="2" className="h-9 text-sm" />
+                <Field label="MPPT count" required error={errors.mppt_count?.message as string}>
+                  <Input {...register("mppt_count", { 
+                    required: "MPPT count is required",
+                    min: { value: 0, message: "Cannot be negative" }
+                  })} type="number" placeholder="2" className="h-9 text-sm" />
                 </Field>
 
                 {/* Hybrid / offgrid extra fields */}
@@ -341,26 +345,41 @@ useEffect(() => {
                   <>
                     <Section title="Battery connection (Hybrid / Off-Grid)" />
 
-                    <Field label="Battery type" required>
-                      <Input {...register("battery_type", { required: true })} placeholder="LiFePO4" className="h-9 text-sm" />
+                    <Field label="Battery type" required error={errors.battery_type?.message as string}>
+                      <Input {...register("battery_type", { required: "Battery type is required" })} placeholder="LiFePO4" className="h-9 text-sm" />
                     </Field>
-                    <Field label="Output power (W)" required>
-                      <Input {...register("output_power", { required: true })} type="number" step="any" placeholder="5000" className="h-9 text-sm" />
+                    <Field label="Output power (W)" required error={errors.output_power?.message as string}>
+                      <Input {...register("output_power", { 
+                        required: "Output power is required",
+                        min: { value: 0, message: "Cannot be negative" }
+                      })} type="number" step="any" placeholder="5000" className="h-9 text-sm" />
                     </Field>
-                    <Field label="Nominal battery voltage (V)" required>
-                      <Input {...register("nominal_battery_voltage", { required: true })} type="number" step="any" placeholder="48" className="h-9 text-sm" />
+                    <Field label="Nominal battery voltage (V)" required error={errors.nominal_battery_voltage?.message as string}>
+                      <Input {...register("nominal_battery_voltage", { 
+                        required: "Nominal battery voltage is required",
+                        min: { value: 0, message: "Cannot be negative" }
+                      })} type="number" step="any" placeholder="48" className="h-9 text-sm" />
                     </Field>
-                    <Field label="No. of battery inputs" required>
-                      <Input {...register("no_of_battery_inputs", { required: true })} type="number" placeholder="1" className="h-9 text-sm" />
+                    <Field label="No. of battery inputs" required error={errors.no_of_battery_inputs?.message as string}>
+                      <Input {...register("no_of_battery_inputs", { 
+                        required: "No. of battery inputs is required",
+                        min: { value: 0, message: "Cannot be negative" }
+                      })} type="number" placeholder="1" className="h-9 text-sm" />
                     </Field>
-                    <Field label="Max charging power (W)" required>
-                      <Input {...register("max_charging_power", { required: true })} type="number" step="any" placeholder="3000" className="h-9 text-sm" />
+                    <Field label="Max charging power (W)" required error={errors.max_charging_power?.message as string}>
+                      <Input {...register("max_charging_power", { 
+                        required: "Max charging power is required",
+                        min: { value: 0, message: "Cannot be negative" }
+                      })} type="number" step="any" placeholder="3000" className="h-9 text-sm" />
                     </Field>
-                    <Field label="Max discharging power (W)" required>
-                      <Input {...register("max_discharging_power", { required: true })} type="number" step="any" placeholder="3000" className="h-9 text-sm" />
+                    <Field label="Max discharging power (W)" required error={errors.max_discharging_power?.message as string}>
+                      <Input {...register("max_discharging_power", { 
+                        required: "Max discharging power is required",
+                        min: { value: 0, message: "Cannot be negative" }
+                      })} type="number" step="any" placeholder="3000" className="h-9 text-sm" />
                     </Field>
-                    <Field label="Battery voltage range" required col2>
-                      <Input {...register("battery_voltage_range", { required: true })} placeholder="44.8 - 57.6V" className="h-9 text-sm" />
+                    <Field label="Battery voltage range" required col2 error={errors.battery_voltage_range?.message as string}>
+                      <Input {...register("battery_voltage_range", { required: "Battery voltage range is required" })} placeholder="44.8 - 57.6V" className="h-9 text-sm" />
                     </Field>
                   </>
                 )}
@@ -372,28 +391,46 @@ useEffect(() => {
               <>
                 <Section title="Battery specs" />
 
-                <Field label="Usable energy (kWh)" required>
-                  <Input {...register("usable_energy", { required: true })} type="number" step="any" placeholder="4.8" className="h-9 text-sm" />
+                <Field label="Usable energy (kWh)" required error={errors.usable_energy?.message as string}>
+                  <Input {...register("usable_energy", { 
+                    required: "Usable energy is required",
+                    min: { value: 0, message: "Cannot be negative" }
+                  })} type="number" step="any" placeholder="4.8" className="h-9 text-sm" />
                 </Field>
-                <Field label="Max energy (kWh)" required>
-                  <Input {...register("max_energy", { required: true })} type="number" step="any" placeholder="5.0" className="h-9 text-sm" />
+                <Field label="Max energy (kWh)" required error={errors.max_energy?.message as string}>
+                  <Input {...register("max_energy", { 
+                    required: "Max energy is required",
+                    min: { value: 0, message: "Cannot be negative" }
+                  })} type="number" step="any" placeholder="5.0" className="h-9 text-sm" />
                 </Field>
-                <Field label="Cell type" required>
-                  <Input {...register("cell_type", { required: true })} placeholder="LiFePO4" className="h-9 text-sm" />
+                <Field label="Cell type" required error={errors.cell_type?.message as string}>
+                  <Input {...register("cell_type", { required: "Cell type is required" })} placeholder="LiFePO4" className="h-9 text-sm" />
                 </Field>
-                <Field label="Nominal voltage (V)" required>
-                  <Input {...register("nominal_voltage", { required: true })} type="number" step="any" placeholder="51.2" className="h-9 text-sm" />
+                <Field label="Nominal voltage (V)" required error={errors.nominal_voltage?.message as string}>
+                  <Input {...register("nominal_voltage", { 
+                    required: "Nominal voltage is required",
+                    min: { value: 0, message: "Cannot be negative" }
+                  })} type="number" step="any" placeholder="51.2" className="h-9 text-sm" />
                 </Field>
-<Field label="Min battery voltage (V)" required>
-  <Input {...register("min_battery_voltage", { required: true })} type="number" step="any" placeholder="44.8" className="h-9 text-sm" />
-</Field>
-<Field label="Max battery voltage (V)" required>
-  <Input {...register("max_battery_voltage", { required: true })} type="number" step="any" placeholder="57.6" className="h-9 text-sm" />
-</Field>
-                <Field label="Cycle count" required>
-                  <Input {...register("cycle_count", { required: true })} type="number" placeholder="6000" className="h-9 text-sm" />
+                <Field label="Min battery voltage (V)" required error={errors.min_battery_voltage?.message as string}>
+                  <Input {...register("min_battery_voltage", { 
+                    required: "Min battery voltage is required",
+                    min: { value: 0, message: "Cannot be negative" }
+                  })} type="number" step="any" placeholder="44.8" className="h-9 text-sm" />
                 </Field>
-                <Field label="Battery model type" col2>
+                <Field label="Max battery voltage (V)" required error={errors.max_battery_voltage?.message as string}>
+                  <Input {...register("max_battery_voltage", { 
+                    required: "Max battery voltage is required",
+                    min: { value: 0, message: "Cannot be negative" }
+                  })} type="number" step="any" placeholder="57.6" className="h-9 text-sm" />
+                </Field>
+                <Field label="Cycle count" required error={errors.cycle_count?.message as string}>
+                  <Input {...register("cycle_count", { 
+                    required: "Cycle count is required",
+                    min: { value: 0, message: "Cannot be negative" }
+                  })} type="number" placeholder="6000" className="h-9 text-sm" />
+                </Field>
+                <Field label="Battery model type" col2 error={errors.battery_model_type?.message as string}>
                   <Input {...register("battery_model_type", { required: false })} placeholder="Wall-mounted" className="h-9 text-sm" />
                 </Field>
               </>
@@ -404,81 +441,61 @@ useEffect(() => {
               <>
                 <Section title="Panel specs" />
 
-                <Field label="Max panel output (W)" required>
-                  <Input {...register("max_panel_output", { required: true })} type="number" step="any" placeholder="620" className="h-9 text-sm" />
+                <Field label="Max panel output (W)" required error={errors.max_panel_output?.message as string}>
+                  <Input {...register("max_panel_output", { 
+                    required: "Max panel output is required",
+                    min: { value: 0, message: "Cannot be negative" }
+                  })} type="number" step="any" placeholder="620" className="h-9 text-sm" />
                 </Field>
-                <Field label="Panel type" required>
-                  <Input {...register("panel_type", { required: true })} placeholder="Monocrystalline" className="h-9 text-sm" />
+                <Field label="Panel type" required error={errors.panel_type?.message as string}>
+                  <Input {...register("panel_type", { required: "Panel type is required" })} placeholder="Monocrystalline" className="h-9 text-sm" />
                 </Field>
-                <Field label="Max efficiency (%)" required>
-                  <Input {...register("max_efficiency", { required: true })} type="number" step="any" placeholder="21.3" className="h-9 text-sm" />
+                <Field label="Max efficiency (%)" required error={errors.max_efficiency?.message as string}>
+                  <Input {...register("max_efficiency", { 
+                    required: "Max efficiency is required",
+                    min: { value: 0, message: "Cannot be negative" }
+                  })} type="number" step="any" placeholder="21.3" className="h-9 text-sm" />
                 </Field>
-                <Field label="Max power voltage / Vmp (V)" required>
-                  <Input {...register("max_power_voltage", { required: true })} type="number" step="any" placeholder="41.8" className="h-9 text-sm" />
+                <Field label="Max power voltage / Vmp (V)" required error={errors.max_power_voltage?.message as string}>
+                  <Input {...register("max_power_voltage", { 
+                    required: "Max power voltage is required",
+                    min: { value: 0, message: "Cannot be negative" }
+                  })} type="number" step="any" placeholder="41.8" className="h-9 text-sm" />
                 </Field>
 
                 <Section title="Dimensions (mm)" />
 
-                <Field label="Width (mm)" required>
-                  <Input {...register("width", { required: true })} type="number" placeholder="1096" className="h-9 text-sm" />
+                <Field label="Width (mm)" required error={errors.width?.message as string}>
+                  <Input {...register("width", { 
+                    required: "Width is required",
+                    min: { value: 0, message: "Cannot be negative" }
+                  })} type="number" placeholder="1096" className="h-9 text-sm" />
                 </Field>
-                <Field label="Height (mm)" required>
-                  <Input {...register("height", { required: true })} type="number" placeholder="2384" className="h-9 text-sm" />
+                <Field label="Height (mm)" required error={errors.height?.message as string}>
+                  <Input {...register("height", { 
+                    required: "Height is required",
+                    min: { value: 0, message: "Cannot be negative" }
+                  })} type="number" placeholder="2384" className="h-9 text-sm" />
                 </Field>
-                <Field label="Depth / thickness (mm)" required>
-                  <Input {...register("length", { required: true })} type="number" placeholder="35" className="h-9 text-sm" />
+                <Field label="Depth / thickness (mm)" required error={errors.length?.message as string}>
+                  <Input {...register("length", { 
+                    required: "Depth is required",
+                    min: { value: 0, message: "Cannot be negative" }
+                  })} type="number" placeholder="35" className="h-9 text-sm" />
                 </Field>
               </>
             )}
 
-            {/* ── TECHNICAL DATASHEET UPLOAD ── */}
+            {/* ── TECHNICAL DATASHEET LINK ── */}
             <Section title="Technical Datasheet" />
-            <div className="col-span-2">
-              <Field label="Product Datasheet (PDF/Image)" hint="Optional. Upload manufacturer technical datasheet to attach with proposals.">
-                <div className="mt-1 flex items-center gap-4 rounded-xl border border-dashed border-zinc-200 bg-zinc-50/50 p-4 transition-all hover:bg-zinc-50">
-                  {uploadingFile ? (
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground py-2 pl-2">
-                      <Loader2 className="h-4 w-4 animate-spin text-primary" />
-                      <span>Uploading datasheet to secure cloud storage...</span>
-                    </div>
-                  ) : watchDataSheetUrl ? (
-                    <div className="flex flex-1 items-center justify-between gap-3">
-                      <div className="flex items-center gap-2">
-                        <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700">📄</span>
-                        <div className="text-left">
-                          <p className="text-xs font-semibold text-zinc-800 line-clamp-1">{watchDataSheetName || "datasheet.pdf"}</p>
-                          <a href={watchDataSheetUrl} target="_blank" rel="noreferrer" className="text-[10px] font-medium text-primary hover:underline">View live datasheet</a>
-                        </div>
-                      </div>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="h-8 text-xs font-medium text-destructive hover:bg-destructive/5 hover:text-destructive shrink-0"
-                        onClick={() => {
-                          setValue("dataSheetUrl", "");
-                          setValue("dataSheetName", "");
-                        }}
-                      >
-                        Remove
-                      </Button>
-                    </div>
-                  ) : (
-                    <label className="flex w-full cursor-pointer flex-col items-center justify-center py-3">
-                      <div className="flex flex-col items-center justify-center space-y-1 text-center">
-                        <span className="text-2xl">📤</span>
-                        <p className="text-xs font-semibold text-zinc-700">Click to upload or drag & drop</p>
-                        <p className="text-[10px] text-zinc-400">PDF, JPG, PNG up to 10MB</p>
-                      </div>
-                      <input
-                        type="file"
-                        accept="application/pdf,image/*"
-                        className="hidden"
-                        onChange={handleFileUpload}
-                      />
-                    </label>
-                  )}
-                </div>
+            <div className="col-span-2 space-y-4">
+              <Field label="Datasheet URL (Google Drive / Dropbox / Direct Link)" hint="Optional. Paste an external link to the datasheet PDF." error={errors.dataSheetUrl?.message as string}>
+                <Input {...register("dataSheetUrl")} placeholder="https://drive.google.com/..." className="h-9 text-sm" />
+                {watch("dataSheetUrl") && (
+                  <p className="text-[11px] text-muted-foreground mt-1.5">
+                    Link will appear in proposals as: <span className="font-semibold text-primary">{`${watch("brand") || 'Item'} ${watch("model") || ''}`.trim()} Data Sheet.pdf</span>
+                  </p>
+                )}
               </Field>
             </div>
 

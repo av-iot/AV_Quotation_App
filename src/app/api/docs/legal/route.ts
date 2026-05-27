@@ -1,9 +1,21 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { promises as fs } from "fs";
 import path from "path";
+import { verifyIdToken } from "@/lib/firebase-admin";
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
+    // Authentication check
+    const token = req.headers.get("authorization")?.replace("Bearer ", "");
+    if (!token) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const decoded = await verifyIdToken(token);
+    if (!decoded) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const docsDir = path.join(process.cwd(), "docs", "legal");
     const docsDirExists = await fs.access(docsDir).then(() => true).catch(() => false);
 
@@ -32,6 +44,7 @@ export async function GET() {
     return NextResponse.json({ documents });
   } catch (error: any) {
     console.error("Error reading legal docs:", error);
-    return NextResponse.json({ error: error.message, documents: [] }, { status: 500 });
+    // Don't leak internal error details
+    return NextResponse.json({ error: "Failed to load documents", documents: [] }, { status: 500 });
   }
 }

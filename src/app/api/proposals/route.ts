@@ -54,10 +54,10 @@ export async function POST(req: NextRequest) {
     seq += 1;
     t.set(counterRef, { proposalSeq: seq }, { merge: true });
     
-    const paddedSeq = String(seq).padStart(6, '0');
+    const seqStr = String(seq); // no zero-padding — sequence starts at 50000+
     return {
-      qtnNo: `QTN_${paddedSeq}`,
-      propNo: `Prop_${paddedSeq}`
+      qtnNo: `P_Inv_${seqStr}`,
+      propNo: `Prop_${seqStr}`
     };
   });
 
@@ -91,13 +91,7 @@ export async function POST(req: NextRequest) {
     req
   );
 
-  // Fire-and-forget: generate docx in background
-  if (body.status === "sent") {
-    fetch(`${process.env.NEXT_PUBLIC_BASE_URL}/api/proposals/${ref.id}/generate`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${token}` },
-    }).catch(console.error);
-  }
+
 
   return NextResponse.json({ data: { id: ref.id, qtnNo: proposal.qtnNo } });
 }
